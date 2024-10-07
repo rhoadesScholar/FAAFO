@@ -14,14 +14,14 @@ class RandomSpatialAugmentation:
     def __init__(self, transforms, p=0.13):
         self.transform = torchvision.transforms.RandomApply(transforms, p=p)
 
-    def __call__(self, image, label):
-        # Apply the same transformation to both image and label
+    def __call__(self, image, mask):
+        # Apply the same transformation to both image and mask
         seed = torch.randint(0, 10000, (1,)).item()  # generate random seed
         torch.manual_seed(seed)
         image = self.transform(image)
         torch.manual_seed(seed)
-        label = self.transform(label)
-        return {"image": image, "label": label}
+        mask = self.transform(mask)
+        return {"image": image, "mask": mask}
 
 
 # %%
@@ -55,9 +55,9 @@ spatial_augment = RandomSpatialAugmentation(
 )
 """
 Example usage:
-    augmented = spatial_augment(image=image, label=label)
+    augmented = spatial_augment(image=image, mask=mask)
     augmented_image = augmented["image"]
-    augmented_label = augmented["label"]
+    augmented_label = augmented["mask"]
 """
 
 # Define augmentations for the ground truth only
@@ -100,7 +100,12 @@ get_scheduler = lambda optimizer, steps: torch.optim.lr_scheduler.MultiStepLR(
 
 class MitolabDataset(torch.utils.data.Dataset):
     def __init__(
-        self, root, spatial_transform=None, gt_transform=None, raw_transform=None
+        self,
+        root,
+        spatial_transform=None,
+        gt_transform=None,
+        raw_transform=None,
+        size=(224, 224),
     ):
         self.root = root
         self.images = glob(os.path.join(root, "images", "*.tiff"))
@@ -108,6 +113,7 @@ class MitolabDataset(torch.utils.data.Dataset):
         self.spatial_transform = spatial_transform
         self.gt_transform = gt_transform
         self.raw_transform = raw_transform
+        self.size = np.array(size)
 
     def __len__(self):
         return len(self.images)
@@ -115,6 +121,9 @@ class MitolabDataset(torch.utils.data.Dataset):
     def __getitem__(self, idx):
         image = tifffile.imread(self.images[idx])
         mask = tifffile.imread(self.masks[idx]) > 0
+
+        image = torchvision.transforms.functional.to_tensor(image)
+        mask = torchvision.transforms.functional.to_tensor(mask)
 
         if self.spatial_transform:
             augmented = self.spatial_transform(image=image, mask=mask)
@@ -125,13 +134,16 @@ class MitolabDataset(torch.utils.data.Dataset):
         if self.raw_transform:
             image = self.raw_transform(image)
 
-        image = torchvision.transforms.functional.to_tensor(image)
-        mask = torchvision.transforms.functional.to_tensor(mask)
+        if self.size is not None and any(self.size != image.shape[-2:]):
+            image = torchvision.transforms.functional.resize(image, self.size)
+            mask = torchvision.transforms.functional.resize(
+                mask, self.size, interpolation=0
+            )
 
         return image, mask
 
 
-def get_data_loaders(batch_size=4, num_workers=16):
+def get_dataloaders(batch_size=4, num_workers=16):
     train_dataset = MitolabDataset(
         os.path.join(mitolab_prefix, "train"),
         spatial_transform=spatial_augment,
