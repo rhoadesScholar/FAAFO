@@ -1,0 +1,13 @@
+pytorch
+pytorch-cuda
+torchvision
+numpy
+matplotlib
+tensorboard
+tensorboardX
+tqdm
+scipy
+monai
+ipykernel
+json
+glob
