@@ -4,12 +4,12 @@ This repository contains the code for the future paper "Knowledge Expansion via 
 
 ## Setup
 
-To install the required packages, run the following command:
+To install the required packages, run the following command from the root directory of this repository:
 
 ```bash
-micromamba create -n KE python=3.10 -y
-micromamba env create -n KE -f requirements.txt -c pytorch -c nvidia -y
+micromamba env create -n KE python==3.11 -f requirements.txt -c pytorch -c nvidia -y
 micromamba activate KE
+pip install -e .
 ```
 
 ## Data
@@ -25,21 +25,21 @@ It is faster to navigate to the websites above, but these datasets can also be d
 python data/download.py
 ```
 
-This will download the data to the `data` directory, unzip it to the same directory, and randomly split the Mito-Lab data into training, validation, and test sets.
+This will download the data to the `data` directory, unzip it to the same directory, and randomly split the Mito-Lab data into training, validation, and test sets (80%, 15%, and 5%, respectively).
 
 ## Training
-Several models are trained in the paper for the experiments. 5 seeds are used for each training run. The same seed is used for all teacher and student pairs.
+Several models are trained, and each training is replicated with 5 unique seeds. The models are as follows:
 
 ### Teacher
 In general:
 
-The teacher model, a Critic from monai, is trained to predict the Binary cross-entropy (BCE) loss on 80% of CEM-MitoLab, using mean squared error (MSE) loss, validated on 15%, and tested on 5%. It receives the raw image data and label masks as input and predicts the BCE loss. Two different teacher conditions exist (see below):
+The teacher model, a ViT from monai, is trained to predict the Binary cross-entropy (BCE) loss on 80% of CEM-MitoLab, validated on 15%, and tested on 5%. It receives the raw image data and label masks as input and predicts the BCE loss. Two different teacher conditions exist (see below):
 
 #### Pretraining
-The teacher model is pretrained using random augmentations of the ground truth masks (i.e. RandomErase, elastic deformations, dropout, etc.). The pretrained model is saved to `models/teacher_pretrained_{seed}.pth`.
+The teacher model is pretrained using random augmentations of the ground truth masks (i.e. RandomErase, perspective, etc.), using mean absolute error (MAE) to avoid overfitting the teacher to 0-error predictions (which will always happen for the GT data). The pretrained model is saved to `models/teacher_pretrained_{seed}.pth`.
 
 #### Joint-Training
-During joint-training, the pretrained teacher model is further trained to predict the BCE loss of a student model, alongside training on the ground truth masks of the same data. This model is saved to `models/teacher_joint_{seed}.pth`.
+During joint-training, the pretrained teacher model is further trained to predict the BCE loss of a student model, alongside training on the ground truth (GT) masks of the same data. This model is saved to `models/teacher_joint_{seed}.pth`.
 
 ### Student
 In general:
@@ -59,7 +59,7 @@ The student model is trained from scratch alongside the teacher model, while usi
 The joint-trained student model is further trained with the teacher model's BCE loss prediction on the entire CEM1.5 (CEM1500k_unlabelled) dataset. The student model is saved to `models/student_expanded_{seed}.pth`.
 
 # Optimizer and Learning Rate Scheduler
-The same optimizer and learning rate scheduler are used for all models. The models are trained for 300 epochs with a batch size of 16. The learning rate is reduced by a factor of 0.1 every 50 epochs.
+The same optimizer and learning rate scheduler are used for all models. The models are trained for 100 epochs with a batch size of 16. The learning rate is reduced by a factor of 0.1 every 25 epochs.
 
 # Augmentations
 ...

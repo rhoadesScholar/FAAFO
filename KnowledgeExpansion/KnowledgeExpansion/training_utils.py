@@ -6,12 +6,15 @@ import torch
 import torchvision
 import tifffile
 
-from data.download import mitolab_prefix
+import os
+
+from KnowledgeExpansion.data.download import mitolab_prefix
 
 
 # Define your augmentation
-class RandomSpatialAugmentation:
+class RandomSpatialAugmentation(torch.nn.Module):
     def __init__(self, transforms, p=0.13):
+        super().__init__()
         self.transform = torchvision.transforms.RandomApply(transforms, p=p)
 
     def __call__(self, image, mask):
@@ -27,13 +30,18 @@ class RandomSpatialAugmentation:
 # %%
 # Defines the hyperparameters
 seeds = [3, 4, 13, 42, 69]
-lr = 1e-4
-batch_size = 16
+lr = 1e-3
+batch_size = 128
+num_workers = 12
 n_epochs = 100
-steps = [50, 75]
+steps = [25, 50, 75]
+
+# Define the command to launch subprocesses
+launch_command = 'bsub -n 12 -gpu "num=1" -q gpu_h100 -o logs/{seed}.out -e logs/{seed}.err python {script} {seed}'
+# launch_command = "python {script} {seed} &"
 
 # Define augmentations for both the input image and the ground truth
-spatial_augment = RandomSpatialAugmentation(
+spatial_transform = RandomSpatialAugmentation(
     [
         torchvision.transforms.RandomAffine(
             degrees=180,
@@ -53,44 +61,33 @@ spatial_augment = RandomSpatialAugmentation(
     ],
     p=0.75,
 )
-"""
-Example usage:
-    augmented = spatial_augment(image=image, mask=mask)
-    augmented_image = augmented["image"]
-    augmented_label = augmented["mask"]
-"""
 
 # Define augmentations for the ground truth only
-augment_gt = torchvision.transforms.RandomApply(
+gt_transform = torchvision.transforms.RandomApply(
     [
         torchvision.transforms.RandomAffine(
             degrees=10,
-            scale=(0.9, 1.0),
-            shear=5,
+            scale=(0.9, 1.1),
+            shear=3,
         ),
         torchvision.transforms.RandomErasing(p=0.13),
-        torchvision.transforms.RandomResizedCrop(
-            (224, 224), scale=(0.8, 1.2), interpolation=0
-        ),
-        torchvision.transforms.RandomHorizontalFlip(),
-        torchvision.transforms.RandomVerticalFlip(),
-        torchvision.transforms.RandomPerspective(),
-    ]
+        torchvision.transforms.RandomResizedCrop((224, 224), scale=(0.9, 1.1)),
+        torchvision.transforms.RandomHorizontalFlip(p=0.03),
+        torchvision.transforms.RandomVerticalFlip(p=0.03),
+        torchvision.transforms.RandomPerspective(distortion_scale=0.13, p=0.13),
+        torchvision.transforms.GaussianBlur(11, sigma=(0.1, 2)),
+    ],
+    p=0.13,
 )
-augment_raw = torchvision.transforms.RandomApply(
+raw_transform = torchvision.transforms.RandomApply(
     [
         torchvision.transforms.GaussianBlur(3, sigma=(0.05, 0.13)),
         torchvision.transforms.ColorJitter(brightness=0.13, contrast=0.13),
     ]
 )
 
-
-# Define the command to launch subprocesses
-# launch_command = "bsub -n 8 -gpu num=1 -q gpu_l4 -o logs/{seed}.out -e logs/{seed}.err python -m {script} {seed}"
-launch_command = "python -m {script} {seed}"
-
 get_optimizer = lambda models, lr: torch.optim.RAdam(
-    [model.parameters() for model in models], lr=lr, decoupled_weight_decay=True
+    *[model.parameters() for model in models], lr=lr, decoupled_weight_decay=True
 )
 
 get_scheduler = lambda optimizer, steps: torch.optim.lr_scheduler.MultiStepLR(
@@ -106,7 +103,9 @@ class MitolabDataset(torch.utils.data.Dataset):
         gt_transform=None,
         raw_transform=None,
         size=(224, 224),
+        **kwargs,
     ):
+        super().__init__()
         self.root = root
         self.images = glob(os.path.join(root, "images", "*.tiff"))
         self.masks = glob(os.path.join(root, "masks", "*.tiff"))
@@ -122,17 +121,8 @@ class MitolabDataset(torch.utils.data.Dataset):
         image = tifffile.imread(self.images[idx])
         mask = tifffile.imread(self.masks[idx]) > 0
 
-        image = torchvision.transforms.functional.to_tensor(image)
-        mask = torchvision.transforms.functional.to_tensor(mask)
-
-        if self.spatial_transform:
-            augmented = self.spatial_transform(image=image, mask=mask)
-            image = augmented["image"]
-            mask = augmented["mask"]
-        if self.gt_transform:
-            mask = self.gt_transform(mask)
-        if self.raw_transform:
-            image = self.raw_transform(image)
+        image = torchvision.transforms.functional.to_tensor(image).float()
+        mask = torchvision.transforms.functional.to_tensor(mask).float()
 
         if self.size is not None and any(self.size != image.shape[-2:]):
             image = torchvision.transforms.functional.resize(image, self.size)
@@ -140,20 +130,43 @@ class MitolabDataset(torch.utils.data.Dataset):
                 mask, self.size, interpolation=0
             )
 
-        return image, mask
+        batch = {}
+        if self.spatial_transform:
+            augmented = self.spatial_transform(image=image, mask=mask)
+            image = augmented["image"]
+            mask = augmented["mask"]
+
+        if self.gt_transform:
+            fake_mask = (self.gt_transform(mask) > 0.5).float()
+            score = torch.nn.functional.binary_cross_entropy(fake_mask, mask)
+            batch["fake_mask"] = fake_mask
+            batch["score"] = score
+
+        if self.raw_transform:
+            image = self.raw_transform(image)
+
+        batch["image"] = image
+        batch["mask"] = mask
+
+        return batch
 
 
-def get_dataloaders(batch_size=4, num_workers=16):
+def get_dataloaders(
+    batch_size=4,
+    num_workers=16,
+    spatial_transform=None,
+    gt_transform=None,
+    raw_transform=None,
+):
+    print(f"Loading data from {mitolab_prefix}")
     train_dataset = MitolabDataset(
         os.path.join(mitolab_prefix, "train"),
-        spatial_transform=spatial_augment,
-        gt_transform=augment_gt,
-        raw_transform=augment_raw,
+        spatial_transform=spatial_transform,
+        gt_transform=gt_transform,
+        raw_transform=raw_transform,
     )
     val_dataset = MitolabDataset(os.path.join(mitolab_prefix, "val"))
     test_dataset = MitolabDataset(os.path.join(mitolab_prefix, "test"))
-
-    pin_memory = torch.cuda.is_available()
 
     # Load the dataset
     train_loader = torch.utils.data.DataLoader(
@@ -161,20 +174,18 @@ def get_dataloaders(batch_size=4, num_workers=16):
         batch_size=batch_size,
         shuffle=True,
         num_workers=num_workers,
-        pin_memory=pin_memory,
     )
     val_loader = torch.utils.data.DataLoader(
         val_dataset,
         batch_size=batch_size,
         num_workers=num_workers,
-        pin_memory=pin_memory,
     )
     test_loader = torch.utils.data.DataLoader(
         test_dataset,
         batch_size=batch_size,
         num_workers=num_workers,
-        pin_memory=pin_memory,
     )
+    print("Data loaded")
     return {"train": train_loader, "val": val_loader, "test": test_loader}
 
 

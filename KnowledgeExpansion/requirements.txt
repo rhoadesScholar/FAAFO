@@ -6,8 +6,9 @@ matplotlib
 tensorboard
 tensorboardX
 tqdm
-scipy
 monai
 ipykernel
-json
-glob
+pandas
+tifffile
+einops
+cudatoolkit
