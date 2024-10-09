@@ -35,6 +35,7 @@ batch_size = 128
 num_workers = 12
 n_epochs = 100
 steps = [25, 50, 75]
+pred_weight = 0.9
 
 # Define the command to launch subprocesses
 launch_command = 'bsub -n 12 -gpu "num=1" -q gpu_h100 -o logs/{seed}.out -e logs/{seed}.err python {script} {seed}'
@@ -187,6 +188,11 @@ def get_dataloaders(
     )
     print("Data loaded")
     return {"train": train_loader, "val": val_loader, "test": test_loader}
+
+
+def log_dict(writer, dict, epoch):
+    for key, value in dict.items():
+        writer.add_scalar(key, value, epoch)
 
 
 # %%

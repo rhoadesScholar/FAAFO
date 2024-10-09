@@ -26,59 +26,55 @@ from KnowledgeExpansion.training_utils import (
     num_workers,
     n_epochs,
     steps,
-    pred_weight,
-    log_dict,
 )
 
 
 # %%
-# Define the pretraining function
-def pretrain_teacher(seed: int):
+# Define the baseline student training function
+def student_baseline(seed: int):
 
-    print(f"Pretraining teacher with seed {seed}")
+    print(f"Training basic student with seed {seed}")
 
     # Set the random seed
     torch.manual_seed(seed)
     np.random.seed(seed)
     random.seed(seed)
 
-    # Load the teacher model
-    from KnowledgeExpansion.models import teacher
+    # Load the student model
+    from KnowledgeExpansion.models import student
 
     if torch.cuda.is_available():
-        teacher = teacher.cuda()
+        student = student.cuda()
 
     # Load the dataset
-    loaders = get_dataloaders(
-        batch_size, num_workers, spatial_transform, gt_transform, raw_transform
-    )
+    loaders = get_dataloaders(batch_size, num_workers, spatial_transform, raw_transform)
 
     # Define the optimizer and scheduler
-    optimizer = get_optimizer([teacher], lr)
+    optimizer = get_optimizer([student], lr)
     scheduler = get_scheduler(optimizer, steps)
 
     # Define the loss function
-    criterion = lambda x, y: (x - y).abs().float().mean()
+    criterion = torch.nn.BCEWithLogitsLoss()
 
     # Make the tensorboard writer
-    writer = SummaryWriter(f"logs/teacher_{seed}")
+    writer = SummaryWriter(f"logs/student_{seed}")
 
     # # Initiate best validation loss
     # best_val = np.inf
 
-    # Save path for the teacher model
+    # Save path for the student model
     save_path = os.path.join(
         os.path.dirname(os.path.dirname(__file__)),
         "models",
         "checkpoints",
-        f"teacher_pretrained_{seed}.pth",
+        f"student_baseline_{seed}.pth",
     )
 
-    # Train the teacher model
+    # Train the student model
     epoch_bar = tqdm(range(n_epochs))
     for epoch in epoch_bar:
         train_bar = tqdm(loaders["train"])
-        teacher.train()
+        student.train()
         for i, batch in enumerate(train_bar):
             if torch.cuda.is_available():
                 for key in batch:
@@ -86,41 +82,26 @@ def pretrain_teacher(seed: int):
 
             optimizer.zero_grad()
 
-            # Forward pass and loss calculation for the augmented mask
-            if pred_weight > 0:
-                output = teacher(batch["image"], batch["fake_mask"])
-                teacher_loss_pred = criterion(output, batch["score"])
-            else:
-                teacher_loss_pred = 0.0
+            # Forward pass and loss calculation
+            output = student(batch["image"])
+            loss = criterion(output, batch["mask"])
 
-            # Forward pass and loss calculation for the original mask
-            if pred_weight < 1:
-                output = teacher(batch["image"], batch["mask"])
-                teacher_loss_gt = criterion(output, 0.0)
-            else:
-                teacher_loss_gt = 0.0
-
-            loss = pred_weight * teacher_loss_pred + (1 - pred_weight) * teacher_loss_gt
             loss.backward()
             optimizer.step()
             train_bar.set_description(f"Loss: {loss.item()}")
-            scalars = {
-                "Teacher (Pred)": teacher_loss_pred.item(),
-                "Teacher (GT)": teacher_loss_gt.item(),
-            }
-            log_dict(writer, scalars, epoch * len(loaders["train"]) + i)
+            writer.add_scalar("Loss", loss.item(), epoch * len(loaders["train"]) + i)
         scheduler.step()
 
         val_bar = tqdm(loaders["val"])
-        teacher.eval()
+        student.eval()
         with torch.no_grad():
             total_loss = 0
             for i, batch in enumerate(val_bar):
                 if torch.cuda.is_available():
                     for key in batch:
                         batch[key] = batch[key].cuda()
-                output = teacher(batch["image"], batch["mask"])
-                loss = criterion(output, 0.0)
+                output = student(batch["image"])
+                loss = criterion(output, batch["mask"])
                 total_loss += loss.item()
             total_loss /= len(loaders["val"])
             writer.add_scalar(
@@ -129,25 +110,24 @@ def pretrain_teacher(seed: int):
 
         epoch_bar.set_description(f"Validation Loss: {total_loss}")
 
-        # # Save the teacher model if it is the best one so far
+        # # Save the student model if it is the best one so far
         # if total_loss < best_val:
         #     if os.path.exists(save_path):
         #         os.remove(save_path)
-        torch.save(teacher, save_path)
+        torch.save(student, save_path)
         # best_val = total_loss
 
 
 if __name__ == "__main__":
     print("Starting pretraining")
-    # torch.multiprocessing.set_start_method("spawn")
     if len(sys.argv) > 1:
         seed = int(sys.argv[1])
-        pretrain_teacher(seed)
+        student_baseline(seed)
     else:
         # Launch subprocesses for each seed
         for seed in seeds:
             print(f"Launching training for seed {seed}")
-            # pretrain_teacher(seed)
+            # student_baseline(seed)
             os.system(launch_command.format(script=__file__, seed=seed))
 
 

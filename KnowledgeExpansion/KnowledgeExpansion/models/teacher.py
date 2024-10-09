@@ -19,6 +19,8 @@ class Teacher(torch.nn.Module):
             patch_size=16,
             num_classes=1,
             spatial_dims=2,
+            classification=True,
+            post_activation=torch.nn.Identity(),
         )
 
     def forward(self, image, mask):
@@ -28,3 +30,5 @@ class Teacher(torch.nn.Module):
 
 
 teacher = Teacher()
+
+# %%

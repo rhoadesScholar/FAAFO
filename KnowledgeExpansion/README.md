@@ -44,7 +44,7 @@ During joint-training, the pretrained teacher model is further trained to predic
 ### Student
 In general:
 
-The student model, a ViT-based autoencoder from monai, is generally trained with BCE loss on 80% of CEM-MitoLab, validated on 15%, and tested on 5%. This model recieves raw image data as input, and outputs a prediction for the label mask. Three different student conditions exist (see below):
+The student model, a Swin UNETR based on: “Hatamizadeh et al., Swin UNETR: Swin Transformers for Semantic Segmentation of Brain Tumors in MRI Images <https://arxiv.org/abs/2201.01266>” from monai, is generally trained with BCE loss on 80% of CEM-MitoLab, validated on 15%, and tested on 5%. This model recieves raw image data as input, and outputs a prediction for the label mask. Three different student conditions exist (see below):
 1) Baseline
 2) Teacher joint-training
 3) Knowledge expansion
