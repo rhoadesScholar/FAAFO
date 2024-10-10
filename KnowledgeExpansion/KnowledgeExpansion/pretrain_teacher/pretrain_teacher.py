@@ -105,8 +105,8 @@ def pretrain_teacher(seed: int):
             optimizer.step()
             train_bar.set_description(f"Loss: {loss.item()}")
             scalars = {
-                "Teacher (Pred)": teacher_loss_pred.item(),
-                "Teacher (GT)": teacher_loss_gt.item(),
+                "Teacher_Pred": teacher_loss_pred.item(),
+                "Teacher_GT": teacher_loss_gt.item(),
             }
             log_dict(writer, scalars, epoch * len(loaders["train"]) + i)
         scheduler.step()
@@ -139,7 +139,6 @@ def pretrain_teacher(seed: int):
 
 if __name__ == "__main__":
     print("Starting pretraining")
-    # torch.multiprocessing.set_start_method("spawn")
     if len(sys.argv) > 1:
         seed = int(sys.argv[1])
         pretrain_teacher(seed)

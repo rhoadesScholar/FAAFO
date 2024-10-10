@@ -48,11 +48,13 @@ def joint_train(seed: int):
     save_path = os.path.join(
         os.path.dirname(os.path.dirname(__file__)), "models", "checkpoints"
     )
-    save_path = save_path + os.path.sep + "{model}_" + f"{seed}.pt"
+    save_path = save_path + os.path.sep + "{model}_" + f"{seed}.pth"
 
     if torch.cuda.is_available():
         student = student.cuda()
-        teacher = torch.load(save_path.format(model="teacher_pretrained")).cuda()
+        teacher = torch.load(
+            save_path.format(model="teacher_pretrained"), weights_only=False
+        ).cuda()
 
     # Load the dataset
     loaders = get_dataloaders(batch_size, num_workers, spatial_transform, raw_transform)
@@ -111,8 +113,8 @@ def joint_train(seed: int):
             )
             scalars = {
                 "Student": student_loss.item(),
-                "Teacher (Pred)": teacher_loss_pred.item(),
-                "Teacher (GT)": teacher_loss_gt.item(),
+                "Teacher_Pred": teacher_loss_pred.item(),
+                "Teacher_GT": teacher_loss_gt.item(),
             }
             log_dict(writer, scalars, epoch * len(loaders["train"]) + i)
         scheduler.step()
@@ -145,14 +147,14 @@ def joint_train(seed: int):
             total_teacher_loss_gt /= len(loaders["val"])
 
             scalars = {
-                "Student": total_student_loss,
-                "Teacher (Pred)": total_teacher_loss_pred,
-                "Teacher (GT)": total_teacher_loss_gt,
+                "Val_Student": total_student_loss,
+                "Val_Teacher_Pred": total_teacher_loss_pred,
+                "Val_Teacher_GT": total_teacher_loss_gt,
             }
             total_loss = (
                 total_student_loss + total_teacher_loss_pred + total_teacher_loss_gt
             )
-            log_dict(writer, scalars, epoch * len(loaders["train"]) + i)
+            log_dict(writer, scalars, (epoch + 1) * len(loaders["train"]) - 1)
 
         epoch_bar.set_description(f"Validation Loss: {total_loss}")
 

@@ -33,7 +33,7 @@ Several models are trained, and each training is replicated with 5 unique seeds.
 ### Teacher
 In general:
 
-The teacher model, a ViT from monai, is trained to predict the Binary cross-entropy (BCE) loss on 80% of CEM-MitoLab, validated on 15%, and tested on 5%. It receives the raw image data and label masks as input and predicts the BCE loss. Two different teacher conditions exist (see below):
+The teacher model, a ViT from monai, is trained to predict the Binary cross-entropy (BCE) loss on 80% of CEM-MitoLab, validated on 15%, and tested on 5%. It receives the raw image data and label masks as input and predicts the BCE loss. Loss is calculated both for actual groundtruth masks, as well as for augmented/predicted masks. A ratio is used to weight the contributions of these to gradient calculations (currently 1:9). Two different teacher conditions exist (see below):
 
 #### Pretraining
 The teacher model is pretrained using random augmentations of the ground truth masks (i.e. RandomErase, perspective, etc.), using mean absolute error (MAE) to avoid overfitting the teacher to 0-error predictions (which will always happen for the GT data). The pretrained model is saved to `models/teacher_pretrained_{seed}.pth`.

@@ -87,9 +87,13 @@ raw_transform = torchvision.transforms.RandomApply(
     ]
 )
 
-get_optimizer = lambda models, lr: torch.optim.RAdam(
-    *[model.parameters() for model in models], lr=lr, decoupled_weight_decay=True
-)
+
+def get_optimizer(models, lr):
+    params = list()
+    for model in models:
+        params += list(model.parameters())
+    return torch.optim.RAdam(params, lr=lr, decoupled_weight_decay=True)
+
 
 get_scheduler = lambda optimizer, steps: torch.optim.lr_scheduler.MultiStepLR(
     optimizer, steps, gamma=0.1
@@ -158,41 +162,37 @@ def get_dataloaders(
     spatial_transform=None,
     gt_transform=None,
     raw_transform=None,
+    datasets=["train", "val", "test"],
 ):
     print(f"Loading data from {mitolab_prefix}")
-    train_dataset = MitolabDataset(
-        os.path.join(mitolab_prefix, "train"),
-        spatial_transform=spatial_transform,
-        gt_transform=gt_transform,
-        raw_transform=raw_transform,
-    )
-    val_dataset = MitolabDataset(os.path.join(mitolab_prefix, "val"))
-    test_dataset = MitolabDataset(os.path.join(mitolab_prefix, "test"))
-
-    # Load the dataset
-    train_loader = torch.utils.data.DataLoader(
-        train_dataset,
-        batch_size=batch_size,
-        shuffle=True,
-        num_workers=num_workers,
-    )
-    val_loader = torch.utils.data.DataLoader(
-        val_dataset,
-        batch_size=batch_size,
-        num_workers=num_workers,
-    )
-    test_loader = torch.utils.data.DataLoader(
-        test_dataset,
-        batch_size=batch_size,
-        num_workers=num_workers,
-    )
+    loaders = {}
+    for dataset in datasets:
+        print(f"Loading {dataset} dataset")
+        if dataset == "train":
+            loaders[dataset] = torch.utils.data.DataLoader(
+                MitolabDataset(
+                    os.path.join(mitolab_prefix, dataset),
+                    spatial_transform=spatial_transform,
+                    gt_transform=gt_transform,
+                    raw_transform=raw_transform,
+                ),
+                batch_size=batch_size,
+                shuffle=True,
+                num_workers=num_workers,
+            )
+        else:
+            loaders[dataset] = torch.utils.data.DataLoader(
+                MitolabDataset(os.path.join(mitolab_prefix, dataset)),
+                batch_size=batch_size,
+                num_workers=num_workers,
+            )
     print("Data loaded")
-    return {"train": train_loader, "val": val_loader, "test": test_loader}
+    return loaders
 
 
-def log_dict(writer, dict, epoch):
+def log_dict(writer, dict, step):
     for key, value in dict.items():
-        writer.add_scalar(key, value, epoch)
+        writer.add_scalar(key, value, step)
 
 
 # %%
