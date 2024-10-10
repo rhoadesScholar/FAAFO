@@ -8,7 +8,7 @@ import tifffile
 
 import os
 
-from KnowledgeExpansion.data.download import mitolab_prefix
+from KnowledgeExpansion.data.download import mitolab_prefix, cem_prefix
 
 
 # Define your augmentation
@@ -17,13 +17,15 @@ class RandomSpatialAugmentation(torch.nn.Module):
         super().__init__()
         self.transform = torchvision.transforms.RandomApply(transforms, p=p)
 
-    def __call__(self, image, mask):
+    def __call__(self, image=None, mask=None):
         # Apply the same transformation to both image and mask
         seed = torch.randint(0, 10000, (1,)).item()  # generate random seed
-        torch.manual_seed(seed)
-        image = self.transform(image)
-        torch.manual_seed(seed)
-        mask = self.transform(mask)
+        if image is not None:
+            torch.manual_seed(seed)
+            image = self.transform(image)
+        if mask is not None:
+            torch.manual_seed(seed)
+            mask = self.transform(mask)
         return {"image": image, "mask": mask}
 
 
@@ -156,15 +158,55 @@ class MitolabDataset(torch.utils.data.Dataset):
         return batch
 
 
+class CEMDataset(torch.utils.data.Dataset):
+    def __init__(
+        self,
+        root,
+        spatial_transform=None,
+        raw_transform=None,
+        size=(224, 224),
+        **kwargs,
+    ):
+        super().__init__()
+        self.root = root
+        self.images = glob(os.path.join(root, "*.tiff"))
+        self.spatial_transform = spatial_transform
+        self.raw_transform = raw_transform
+        self.size = np.array(size)
+
+    def __len__(self):
+        return len(self.images)
+
+    def __getitem__(self, idx):
+        image = tifffile.imread(self.images[idx])
+
+        image = torchvision.transforms.functional.to_tensor(image).float()
+
+        if self.size is not None and any(self.size != image.shape[-2:]):
+            image = torchvision.transforms.functional.resize(image, self.size)
+
+        batch = {}
+        if self.spatial_transform:
+            augmented = self.spatial_transform(image=image)
+            image = augmented["image"]
+
+        if self.raw_transform:
+            image = self.raw_transform(image)
+
+        batch["image"] = image
+
+        return batch
+
+
 def get_dataloaders(
     batch_size=4,
     num_workers=16,
     spatial_transform=None,
     gt_transform=None,
     raw_transform=None,
-    datasets=["train", "val", "test"],
+    datasets=["train", "val", "test"],  # "unlabeled"
 ):
-    print(f"Loading data from {mitolab_prefix}")
+    print(f"Loading data from {mitolab_prefix}\n\tor {cem_prefix}")
     loaders = {}
     for dataset in datasets:
         print(f"Loading {dataset} dataset")
@@ -174,6 +216,17 @@ def get_dataloaders(
                     os.path.join(mitolab_prefix, dataset),
                     spatial_transform=spatial_transform,
                     gt_transform=gt_transform,
+                    raw_transform=raw_transform,
+                ),
+                batch_size=batch_size,
+                shuffle=True,
+                num_workers=num_workers,
+            )
+        elif dataset == "unlabeled":
+            loaders[dataset] = torch.utils.data.DataLoader(
+                CEMDataset(
+                    os.path.join(cem_prefix, "cem1.5M", "*"),
+                    spatial_transform=spatial_transform,
                     raw_transform=raw_transform,
                 ),
                 batch_size=batch_size,

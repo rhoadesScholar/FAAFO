@@ -2,6 +2,10 @@
 
 This repository contains the code for the future paper "Knowledge Expansion via Error Distribution Prediction" accepted at some conference hopefully.
 
+## Hypothesis
+
+I hypothesize that a teacher model can predict the error distribution of a student model, and that this prediction can be used to improve the student model's performance. Specifically, a student model that has been trained with a teacher model's error distribution prediction alongside actual groundtruth (GT) data, as well as on an external, unlabeled, dataset, will outperform other student models in terms of accuracy and Expected Calibration Error (ECE).
+
 ## Setup
 
 To install the required packages, run the following command from the root directory of this repository:
@@ -53,13 +57,30 @@ The student model, a Swin UNETR based on: “Hatamizadeh et al., Swin UNETR: Swi
 This student model is trained from scratch with BCE loss on 80% of CEM-MitoLab, validated on 15%, and tested on 5%. The student model is saved to `models/student_baseline_{seed}.pth`.
 
 #### Teacher Joint-Training
-The student model is trained from scratch alongside the teacher model, while using the actual BCE loss from the groundtruth masks. The student model is saved to `models/student_joint_{seed}.pth`.
+The student model is trained from scratch alongside the teacher model, while using the actual BCE loss from the groundtruth masks. Because the teacher and student losses are combined before calculating gradients, the student also receives a learning signal based on how well the teacher could predict its error. This should encourage it to collaborate with the teacher, likely by making mistakes for which the teacher is good at predicting the error. The student model is saved to `models/student_joint_{seed}.pth`.
 
 #### Knowledge Expansion
-The joint-trained student model is further trained with the teacher model's BCE loss prediction on the entire CEM1.5 (CEM1500k_unlabelled) dataset. The student model is saved to `models/student_expanded_{seed}.pth`.
+The joint-trained student model is further trained with the teacher model's BCE loss prediction on the entire CEM1.5M(CEM1500k_unlabelled) dataset. The student model is saved to `models/student_expanded_{seed}.pth`.
 
 # Optimizer and Learning Rate Scheduler
 The same optimizer and learning rate scheduler are used for all models. The models are trained for 100 epochs with a batch size of 16. The learning rate is reduced by a factor of 0.1 every 25 epochs.
 
 # Augmentations
-...
+The following augmentations are used for training all models:
+- RandomAffine
+- RandomHorizontalFlip
+- RandomVerticalFlip
+- RandomResizedCrop
+
+Augmentations applied to the raw image data during training include:
+- GaussianBlur
+- ColorJitter
+
+Augmentations applied to the GT masks for the pseudo-prediction condition during teacher pretraining include:
+- RandomAffine
+- RandomErasing
+- RandomResizedCrop
+- RandomHorizontalFlip
+- RandomVerticalFlip
+- RandomPerspective
+- GaussianBlur

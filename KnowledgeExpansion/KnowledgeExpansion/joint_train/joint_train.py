@@ -41,20 +41,22 @@ def joint_train(seed: int):
     np.random.seed(seed)
     random.seed(seed)
 
-    # Load the student model
-    from KnowledgeExpansion.models import student
-
     # Save path for the models
     save_path = os.path.join(
         os.path.dirname(os.path.dirname(__file__)), "models", "checkpoints"
     )
     save_path = save_path + os.path.sep + "{model}_" + f"{seed}.pth"
 
+    # Load the student model
+    from KnowledgeExpansion.models import student
+
+    teacher = torch.load(
+        save_path.format(model="teacher_pretrained"), weights_only=False
+    )
+
     if torch.cuda.is_available():
         student = student.cuda()
-        teacher = torch.load(
-            save_path.format(model="teacher_pretrained"), weights_only=False
-        ).cuda()
+        teacher = teacher.cuda()
 
     # Load the dataset
     loaders = get_dataloaders(batch_size, num_workers, spatial_transform, raw_transform)
@@ -168,7 +170,7 @@ def joint_train(seed: int):
 
 
 if __name__ == "__main__":
-    print("Starting pretraining")
+    print("Starting joint training")
     if len(sys.argv) > 1:
         seed = int(sys.argv[1])
         joint_train(seed)

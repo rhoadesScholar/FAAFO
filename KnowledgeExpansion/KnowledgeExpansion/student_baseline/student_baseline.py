@@ -119,7 +119,7 @@ def student_baseline(seed: int):
 
 
 if __name__ == "__main__":
-    print("Starting pretraining")
+    print("Starting baseline student training")
     if len(sys.argv) > 1:
         seed = int(sys.argv[1])
         student_baseline(seed)

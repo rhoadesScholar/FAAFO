@@ -11,6 +11,7 @@ test_percentage = 0.05
 seed = 42
 
 mitolab_prefix = os.path.join(os.path.dirname(__file__), "CEM-MitoLab")
+cem_prefix = os.path.join(os.path.dirname(__file__), "CEM1500k_unlabelled")
 
 assert (
     train_percentage + val_percentage + test_percentage == 1.0
