@@ -1,10 +1,57 @@
 # %%
+import json
 import os
 import numpy as np
 from glob import glob
 import matplotlib.pyplot as plt
 from KnowledgeExpansion.training_utils import get_dataloaders, batch_size, num_workers
 import torch
+
+
+def accuracy(y_true, y_pred):
+    """
+    Compute the accuracy of the predicted segmentation mask.
+
+    Parameters
+    ----------
+    y_true : array-like of shape (n_samples,)
+        True labels.
+    y_pred : array-like of shape (n_samples,)
+        Predicted probabilities (after softmax or sigmoid).
+
+    Returns
+    -------
+    float
+        Accuracy value.
+    """
+    y_true = np.array(y_true).astype(bool)
+    y_pred = np.array(y_pred) > 0.5
+    accuracy = (y_true == y_pred).mean()
+    return accuracy
+
+
+def iou(y_true, y_pred):
+    """
+    Compute the Intersection over Union (IoU) of the predicted segmentation mask.
+
+    Parameters
+    ----------
+    y_true : array-like of shape (n_samples,)
+        True labels.
+    y_pred : array-like of shape (n_samples,)
+        Predicted probabilities (after softmax or sigmoid).
+
+    Returns
+    -------
+    float
+        IoU value.
+    """
+    y_true = np.array(y_true).astype(bool)
+    y_pred = np.array(y_pred) > 0.5
+    intersection = np.logical_and(y_true, y_pred).sum()
+    union = np.logical_or(y_true, y_pred).sum()
+    iou = intersection / union
+    return iou
 
 
 def calibration_error(y_true, y_pred, num_bins=15):
@@ -50,10 +97,10 @@ def calibration_error(y_true, y_pred, num_bins=15):
             accs.append(accuracy_in_bin)
             confs.append(avg_confidence_in_bin)
 
-    return ece, mce, accs, confs
+    return ece, float(mce), accs, confs
 
 
-def plot_calibration_curves(accs_dict, confs_dict, result_strings):
+def plot_calibration_curves(accs_dict, confs_dict, ece_dict, mce_dict):
     """
     Plot the calibration curves of the student models.
 
@@ -63,8 +110,10 @@ def plot_calibration_curves(accs_dict, confs_dict, result_strings):
         Dictionary containing the accuracies of the student models.
     confs_dict : dict
         Dictionary containing the confidences of the student models.
-    result_strings : dict
-        Dictionary containing the formatted name and ECE / MCE values of the student models for the legend.
+    ece_dict : dict
+        Dictionary containing the Expected Calibration Error (ECE) of the student models.
+    mce_dict : dict
+        Dictionary containing the Maximum Calibration Error (MCE) of the student models.
 
     Returns
     -------
@@ -72,24 +121,67 @@ def plot_calibration_curves(accs_dict, confs_dict, result_strings):
         The calibration curves.
     """
     student_type_colors = {"baseline": "blue", "joint": "green", "expanded": "red"}
-    plt.figure(figsize=(10, 10))
+    num_types = len(student_type_colors)
+    num_students = len(accs_dict) // num_types + 1
+    fig, axes = plt.subplots(
+        nrows=num_types,
+        ncols=num_students,
+        figsize=(5 * num_students, 5 * num_types),
+        sharex=True,
+        sharey=True,
+    )
+    avg_accs = {k: [] for k in student_type_colors.keys()}
+    avg_confs = {k: [] for k in student_type_colors.keys()}
+    avg_ece = {k: [] for k in student_type_colors.keys()}
+    avg_mce = {k: [] for k in student_type_colors.keys()}
+    student_inds = {k: 0 for k in student_type_colors.keys()}
+    # Plot the calibration curves
     for student_name, accs in accs_dict.items():
-        for student_type, color in student_type_colors.items():
-            if student_type in student_name:
-                break
         confs = confs_dict[student_name]
-        plt.plot(
-            confs,
-            accs,
-            label=result_strings[student_name],
+        for i, (student_type, color) in enumerate(student_type_colors.items()):
+            if student_type in student_name:
+                avg_accs[student_type].append(accs)
+                avg_confs[student_type].append(confs)
+                avg_ece[student_type].append(ece_dict[student_name])
+                avg_mce[student_type].append(mce_dict[student_name])
+                break
+        j = student_inds[student_type]
+        # Add ECE and MCE values to the legend
+        result_string = f"{student_name}:\nECE = {ece_dict[student_name]:.4f},\nMCE = {mce_dict[student_name]:.4f}"
+        axes[i, j].bar(confs, accs, width=0.1, label=result_string, color=color)
+        axes[i, j].plot([0, 1], [0, 1], linestyle="--", color="black")
+        axes[i, j].set_xlabel("Confidence")
+        axes[i, j].set_ylabel("Accuracy")
+        axes[i, j].set_title(f"{student_name}")
+        axes[i, j].legend(loc="upper left")
+        student_inds[student_type] += 1
+
+    # Now plot the averages
+    for j, (student_type, color) in enumerate(student_type_colors.items()):
+        accs_std = np.std(avg_accs[student_type], axis=0)
+        avg_accs[student_type] = np.mean(avg_accs[student_type], axis=0)
+        confs_std = np.std(avg_confs[student_type], axis=0)
+        avg_confs[student_type] = np.mean(avg_confs[student_type], axis=0)
+        std_ece = np.std(avg_ece[student_type])
+        avg_ece[student_type] = np.mean(avg_ece[student_type])
+        std_mce = np.std(avg_mce[student_type])
+        avg_mce[student_type] = np.mean(avg_mce[student_type])
+        # Add ECE and MCE values to the legend
+        result_string = f"{student_type} Avg:\nECE = {avg_ece[student_type]:.4f} ± {std_ece},\nMCE = {avg_mce[student_type]:.4f} ± {std_mce}"
+        axes[j, -1].bar(
+            avg_confs[student_type],
+            avg_accs[student_type],
+            yerr=accs_std,
+            width=0.1,
+            label=result_string,
             color=color,
-            marker="o",
+            capsize=5,
         )
-    plt.plot([0, 1], [0, 1], linestyle="--", color="black")
-    plt.xlabel("Confidence")
-    plt.ylabel("Accuracy")
-    plt.title("Student Calibration Curves")
-    plt.legend()
+        axes[j, -1].plot([0, 1], [0, 1], linestyle="--", color="black")
+        axes[j, -1].set_xlabel("Confidence")
+        axes[j, -1].set_ylabel("Accuracy")
+        axes[j, -1].set_title(f"{student_type} Average")
+        axes[j, -1].legend(loc="upper left")
     plt.show()
 
     return plt.gcf()
@@ -113,6 +205,8 @@ def main():
     mce_dict = {}
     accs_dict = {}
     confs_dict = {}
+    ious_dict = {}
+    accuracy_dict = {}
 
     for student_path in student_paths:
         print(f"Calculating calibration error for {student_path}")
@@ -146,29 +240,31 @@ def main():
                 y_pred.extend(prob.cpu().numpy().flatten())
 
         # Calculate the ECE and MCE
+        ious_dict[student_name] = iou(y_true, y_pred)
+        accuracy_dict[student_name] = accuracy(y_true, y_pred)
         ece, mce, accs, confs = calibration_error(np.array(y_true), np.array(y_pred))
         ece_dict[student_name] = ece
         mce_dict[student_name] = mce
         accs_dict[student_name] = accs
         confs_dict[student_name] = confs
-        print(f"ECE = {ece:.4f}, MCE = {mce:.4f}")
-
-    # Print the ECE and MCE values
-    result_strings = {}
-    for student_name, ece in ece_dict.items():
-        result_strings[student_name] = (
-            f"{student_name}:\n\tECE = {ece:.4f},\n\tMCE = {mce_dict[student_name]:.4f}"
+        print(f"Student: {student_name}")
+        print(
+            f"\tIoU = {ious_dict[student_name]:.4f}\n\tAccuracy = {accuracy_dict[student_name]:.4f}"
         )
-        print(result_strings[student_name])
+        print(f"\tECE = {ece:.4f}\n\tMCE = {mce:.4f}")
 
     # Plot the calibration curves
     print("Plotting calibration curves")
-    fig = plot_calibration_curves(accs_dict, confs_dict, result_strings)
+    fig = plot_calibration_curves(accs_dict, confs_dict, ece_dict, mce_dict)
 
-    return fig, ece_dict, mce_dict, accs_dict, confs_dict
+    return fig, ece_dict, mce_dict, accs_dict, confs_dict, ious_dict, accuracy_dict
 
 
 # %%
 if __name__ == "__main__":
-    fig, ece_dict, mce_dict, accs_dict, confs_dict = main()
+    fig, ece_dict, mce_dict, accs_dict, confs_dict, ious_dict, accuracy_dict = main()
     fig.savefig("calibration_curves.png")
+    res_names = ["ece", "mce", "ious", "accuracy"]
+    for i, results in enumerate([ece_dict, mce_dict, ious_dict, accuracy_dict]):
+        with open(f"{res_names[i]}.txt", "w") as f:
+            json.dump(results, f)

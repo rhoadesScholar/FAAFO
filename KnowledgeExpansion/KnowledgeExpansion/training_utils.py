@@ -37,7 +37,7 @@ batch_size = 128
 num_workers = 12
 n_epochs = 100
 steps = [25, 50, 75]
-pred_weight = 0.9
+pred_weight = 1.0
 
 # Define the command to launch subprocesses
 launch_command = 'bsub -n 12 -gpu "num=1" -q gpu_h100 -o logs/{seed}.out -e logs/{seed}.err python {script} {seed}'

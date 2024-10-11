@@ -62,6 +62,9 @@ The student model is trained from scratch alongside the teacher model, while usi
 #### Knowledge Expansion
 The joint-trained student model is further trained with the teacher model's BCE loss prediction on the entire CEM1.5M(CEM1500k_unlabelled) dataset. The student model is saved to `models/student_expanded_{seed}.pth`.
 
+### Commitee Expansion
+The joint-trained student models are also trained with all teacher models' BCE loss prediction on the entire CEM1.5M(CEM1500k_unlabelled) dataset. The student model is saved to `models/student_committee_expansion_{seed}.pth`.
+
 # Optimizer and Learning Rate Scheduler
 The same optimizer and learning rate scheduler are used for all models. The models are trained for 100 epochs with a batch size of 16. The learning rate is reduced by a factor of 0.1 every 25 epochs.
 

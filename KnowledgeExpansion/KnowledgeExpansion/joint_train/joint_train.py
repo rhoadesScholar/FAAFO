@@ -94,14 +94,14 @@ def joint_train(seed: int):
                 teacher_output = teacher(batch["image"], student_output)
                 teacher_loss_pred = teacher_criterion(teacher_output, student_loss)
             else:
-                teacher_loss_pred = 0.0
+                teacher_loss_pred = torch.tensor(0.0)
 
             # Forward pass and loss calculation for the original mask
             if pred_weight < 1:
                 teacher_output = teacher(batch["image"], batch["mask"])
                 teacher_loss_gt = teacher_criterion(teacher_output, 0.0)
             else:
-                teacher_loss_gt = 0.0
+                teacher_loss_gt = torch.tensor(0.0)
 
             loss = (
                 student_loss
