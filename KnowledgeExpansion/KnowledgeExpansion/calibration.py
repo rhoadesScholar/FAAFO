@@ -129,13 +129,15 @@ def plot_calibration_curves(accs_dict, confs_dict, ece_dict, mce_dict):
     """
     student_type_colors = {
         "baseline": "blue",
-        "joint": "green",
+        # "joint": "green",
         "split": "purple",
-        "expansion": "red",
+        # "expansion": "red",
         "ensemble_expanded": "orange",
+        "ensemble_alternating": "cyan",
     }
     num_types = len(student_type_colors)
-    num_students = len(accs_dict) // num_types + 1
+    # num_students = len(accs_dict) // num_types + 1
+    num_students = 5
     fig, axes = plt.subplots(
         nrows=num_types,
         ncols=num_students,

@@ -20,9 +20,9 @@
 # sh clean.sh
 # python split_train.py
 
-# cd ../student_baseline
-# sh clean.sh
-# python student_baseline.py
+# # cd ../student_baseline
+# # sh clean.sh
+# # python student_baseline.py
 
 # # Loop until no jobs are running or pending
 # while bjobs 2>&1 | grep -q 'RUN\|PEND'; do
@@ -38,6 +38,12 @@ echo "Knowledge committee expansion..."
 cd ensemble_expanded
 sh clean.sh
 python ensemble_expanded.py
+
+
+echo "Knowledge committee expansion with alternating BCE..."
+cd ../ensemble_alternating
+sh clean.sh
+python ensemble_alternating.py
 
 # Loop until no jobs are running or pending
 while bjobs 2>&1 | grep -q 'RUN\|PEND'; do

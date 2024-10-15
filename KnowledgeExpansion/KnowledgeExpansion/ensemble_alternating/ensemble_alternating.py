@@ -34,9 +34,11 @@ batch_size = int(batch_size)
 
 # %%
 # Define the baseline student training function
-def ensemble_expanded(seed: int):
+def ensemble_alternating(seed: int):
 
-    print(f"Knowledge expansion for student with seed {seed} using all teachers.")
+    print(
+        f"Knowledge expansion for student with seed {seed} using all teachers and alternating with BCE on actual GT."
+    )
 
     # Set the random seed
     torch.manual_seed(seed)
@@ -76,7 +78,7 @@ def ensemble_expanded(seed: int):
         num_workers,
         spatial_transform,
         raw_transform,
-        datasets=["val", "unlabeled"],
+        datasets=["train", "val", "unlabeled"],
     )
 
     # Define the optimizer and scheduler
@@ -85,12 +87,13 @@ def ensemble_expanded(seed: int):
     scheduler = get_scheduler(optimizer, steps)
 
     # Make the tensorboard writer
-    writer = SummaryWriter(f"logs/ensemble_expanded_{seed}")
+    writer = SummaryWriter(f"logs/ensemble_alternating_{seed}")
 
     # Train the student model
     epoch_bar = tqdm(range(n_epochs))
     for epoch in epoch_bar:
         student.train()
+        # Train by knowledge expansion
         train_bar = tqdm(loaders["unlabeled"])
         for i, batch in enumerate(train_bar):
             if torch.cuda.is_available():
@@ -111,13 +114,33 @@ def ensemble_expanded(seed: int):
             optimizer.step()
             train_bar.set_description(f"Loss: {student_loss.item()} ± {np.std(losses)}")
             writer.add_histogram(
-                "Student loss", losses, epoch * len(loaders["unlabeled"]) + i
+                "Student Predicted Loss", losses, epoch * len(loaders["unlabeled"]) + i
             )
             scalars = {
                 "Predicted loss": student_loss.item(),
                 "Loss std": np.std(losses),
             }
             log_dict(writer, scalars, epoch * len(loaders["unlabeled"]) + i)
+
+        # Train by BCE on actual GT
+        train_bar = tqdm(loaders["train"])
+        for i, batch in enumerate(train_bar):
+            if torch.cuda.is_available():
+                for key in batch:
+                    batch[key] = batch[key].cuda()
+
+            optimizer.zero_grad()
+
+            # Forward pass and loss calculation
+            output = student(batch["image"])
+            loss = student_criterion(output, batch["mask"])
+
+            loss.backward()
+            optimizer.step()
+            train_bar.set_description(f"Loss: {loss.item()}")
+            writer.add_scalar(
+                "BCE_Loss", loss.item(), epoch * len(loaders["train"]) + i
+            )
         scheduler.step()
 
         # Validation
@@ -142,7 +165,7 @@ def ensemble_expanded(seed: int):
                     student_pred_loss += loss.mean()
                 total_student_pred_loss += student_pred_loss.item() / len(teachers)
             writer.add_histogram(
-                "Val_Student_Pred_Loss",
+                "Val_Pred_Loss",
                 losses,
                 (epoch + 1) * len(loaders["train"]) - 1,
             )
@@ -150,8 +173,8 @@ def ensemble_expanded(seed: int):
             total_student_pred_loss /= len(loaders["val"])
 
             scalars = {
-                "Val_Student_BCE": total_student_loss,
-                "Val_Student_Pred_Loss": total_student_pred_loss,
+                "Val_BCE": total_student_loss,
+                "Val_Pred_Loss": total_student_pred_loss,
             }
             log_dict(writer, scalars, (epoch + 1) * len(loaders["train"]) - 1)
             total_loss = (total_student_loss + total_student_pred_loss) / 2
@@ -159,15 +182,16 @@ def ensemble_expanded(seed: int):
         epoch_bar.set_description(f"Validation Loss: {total_loss}")
 
         torch.save(
-            student, save_path.format(model="student_ensemble_expanded", seed=seed)
+            student,
+            save_path.format(model="student_ensemble_alternating", seed=seed),
         )
 
 
 if __name__ == "__main__":
-    print("Starting committee knowledge expansion")
+    print("Starting alternating committee knowledge expansion")
     if len(sys.argv) > 1:
         seed = int(sys.argv[1])
-        ensemble_expanded(seed)
+        ensemble_alternating(seed)
     else:
         # Launch subprocesses for each seed
         for seed in seeds:
