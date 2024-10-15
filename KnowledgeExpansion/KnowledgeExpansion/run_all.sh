@@ -14,26 +14,28 @@
 # echo "Pretraining teachers is done!"
 
 
-echo "split students and teachers..."
-cd split_train
-sh clean.sh
-python split_train.py
+# echo "split students and teachers..."
+# # cd ../split_train
+# cd split_train
+# sh clean.sh
+# python split_train.py
 
-cd ../student_baseline
-sh clean.sh
-python student_baseline.py
+# cd ../student_baseline
+# sh clean.sh
+# python student_baseline.py
 
-# Loop until no jobs are running or pending
-while bjobs 2>&1 | grep -q 'RUN\|PEND'; do
-    echo "Jobs are still running or pending..."
-    sleep 560  # Wait for 5 minutes before checking again
-done
+# # Loop until no jobs are running or pending
+# while bjobs 2>&1 | grep -q 'RUN\|PEND'; do
+#     echo "Jobs are still running or pending..."
+#     sleep 560  # Wait for 5 minutes before checking again
+# done
 
-echo "split training is done!"
+# echo "split training is done!"
 
 
 echo "Knowledge committee expansion..."
-cd ../ensemble_expanded
+# cd ../ensemble_expanded
+cd ensemble_expanded
 sh clean.sh
 python ensemble_expanded.py
 

@@ -130,6 +130,7 @@ def plot_calibration_curves(accs_dict, confs_dict, ece_dict, mce_dict):
     student_type_colors = {
         "baseline": "blue",
         "joint": "green",
+        "split": "purple",
         "expansion": "red",
         "ensemble_expanded": "orange",
     }
