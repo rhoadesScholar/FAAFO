@@ -1,10 +1,17 @@
 # %%
+import os
+import sys
 import json
 import os
 import numpy as np
 from glob import glob
 import matplotlib.pyplot as plt
-from KnowledgeExpansion.training_utils import get_dataloaders, batch_size, num_workers
+from KnowledgeExpansion.training_utils import (
+    get_dataloaders,
+    batch_size,
+    num_workers,
+    launch_command,
+)
 import torch
 
 
@@ -120,7 +127,12 @@ def plot_calibration_curves(accs_dict, confs_dict, ece_dict, mce_dict):
     matplotlib.pyplot.Figure
         The calibration curves.
     """
-    student_type_colors = {"baseline": "blue", "joint": "green", "expanded": "red"}
+    student_type_colors = {
+        "baseline": "blue",
+        "joint": "green",
+        "expansion": "red",
+        "ensemble_expanded": "orange",
+    }
     num_types = len(student_type_colors)
     num_students = len(accs_dict) // num_types + 1
     fig, axes = plt.subplots(
@@ -138,13 +150,17 @@ def plot_calibration_curves(accs_dict, confs_dict, ece_dict, mce_dict):
     # Plot the calibration curves
     for student_name, accs in accs_dict.items():
         confs = confs_dict[student_name]
+        found = False
         for i, (student_type, color) in enumerate(student_type_colors.items()):
             if student_type in student_name:
                 avg_accs[student_type].append(accs)
                 avg_confs[student_type].append(confs)
                 avg_ece[student_type].append(ece_dict[student_name])
                 avg_mce[student_type].append(mce_dict[student_name])
+                found = True
                 break
+        if not found:
+            raise ValueError(f"Student type not found in {student_name}")
         j = student_inds[student_type]
         # Add ECE and MCE values to the legend
         result_string = f"{student_name}:\nECE = {ece_dict[student_name]:.4f},\nMCE = {mce_dict[student_name]:.4f}"
@@ -262,9 +278,18 @@ def main():
 
 # %%
 if __name__ == "__main__":
-    fig, ece_dict, mce_dict, accs_dict, confs_dict, ious_dict, accuracy_dict = main()
-    fig.savefig("calibration_curves.png")
-    res_names = ["ece", "mce", "ious", "accuracy"]
-    for i, results in enumerate([ece_dict, mce_dict, ious_dict, accuracy_dict]):
-        with open(f"{res_names[i]}.txt", "w") as f:
-            json.dump(results, f)
+    if len(sys.argv) > 1:
+        fig, ece_dict, mce_dict, accs_dict, confs_dict, ious_dict, accuracy_dict = (
+            main()
+        )
+        fig.savefig("calibration_curves.png")
+        res_names = ["ece", "mce", "ious", "accuracy"]
+        for i, results in enumerate([ece_dict, mce_dict, ious_dict, accuracy_dict]):
+            with open(f"{res_names[i]}.txt", "w") as f:
+                json.dump(results, f)
+    else:
+        success = os.system(launch_command.format(script=__file__, seed="all_calib"))
+        if success == 0:
+            print("All calibration curves have been plotted")
+        else:
+            os.system(f"python {__file__} all_calib")

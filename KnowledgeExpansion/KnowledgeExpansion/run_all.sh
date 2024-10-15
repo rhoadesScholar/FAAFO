@@ -1,9 +1,27 @@
 #!/bin/bash
 
-echo "Pretraining teachers..."
-cd pretrain_teacher
+# echo "Pretraining teachers..."
+# cd pretrain_teacher
+# sh clean.sh
+# python pretrain_teacher.py
+
+# # Loop until no jobs are running or pending
+# while bjobs 2>&1 | grep -q 'RUN\|PEND'; do
+#     echo "Jobs are still running or pending..."
+#     sleep 560  # Wait for 5 minutes before checking again
+# done
+
+# echo "Pretraining teachers is done!"
+
+
+echo "split students and teachers..."
+cd split_train
 sh clean.sh
-python pretrain_teacher.py
+python split_train.py
+
+cd ../student_baseline
+sh clean.sh
+python student_baseline.py
 
 # Loop until no jobs are running or pending
 while bjobs 2>&1 | grep -q 'RUN\|PEND'; do
@@ -11,12 +29,13 @@ while bjobs 2>&1 | grep -q 'RUN\|PEND'; do
     sleep 560  # Wait for 5 minutes before checking again
 done
 
-echo "Pretraining teachers is done!"
+echo "split training is done!"
 
-echo "Joint students and teachers..."
-cd ../joint_train
+
+echo "Knowledge committee expansion..."
+cd ../ensemble_expanded
 sh clean.sh
-python joint_train.py
+python ensemble_expanded.py
 
 # Loop until no jobs are running or pending
 while bjobs 2>&1 | grep -q 'RUN\|PEND'; do
@@ -24,20 +43,8 @@ while bjobs 2>&1 | grep -q 'RUN\|PEND'; do
     sleep 560  # Wait for 5 minutes before checking again
 done
 
-echo "Joint training is done!"
+echo "Knowledge ensemble_expanded is done!"
 
-echo "Knowledge expansion..."
-cd ../expansion
-sh clean.sh
-python expansion.py
-
-# Loop until no jobs are running or pending
-while bjobs 2>&1 | grep -q 'RUN\|PEND'; do
-    echo "Jobs are still running or pending..."
-    sleep 560  # Wait for 5 minutes before checking again
-done
-
-echo "Knowledge expansion is done!"
 
 echo "Evaluating accuracy and calibration..."
 cd ..

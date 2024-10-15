@@ -32,12 +32,14 @@ class RandomSpatialAugmentation(torch.nn.Module):
 # %%
 # Defines the hyperparameters
 seeds = [3, 4, 13, 42, 69]
-lr = 1e-3
+lr = 1e-2
 batch_size = 128
 num_workers = 12
-n_epochs = 100
+n_epochs = 300
 steps = [25, 50, 75]
 pred_weight = 1.0
+
+use_scheduler = False
 
 # Define the command to launch subprocesses
 launch_command = 'bsub -n 12 -gpu "num=1" -q gpu_h100 -o logs/{seed}.out -e logs/{seed}.err python {script} {seed}'
@@ -87,18 +89,6 @@ raw_transform = torchvision.transforms.RandomApply(
         torchvision.transforms.GaussianBlur(3, sigma=(0.05, 0.13)),
         torchvision.transforms.ColorJitter(brightness=0.13, contrast=0.13),
     ]
-)
-
-
-def get_optimizer(models, lr):
-    params = list()
-    for model in models:
-        params += list(model.parameters())
-    return torch.optim.RAdam(params, lr=lr, decoupled_weight_decay=True)
-
-
-get_scheduler = lambda optimizer, steps: torch.optim.lr_scheduler.MultiStepLR(
-    optimizer, steps, gamma=0.1
 )
 
 
@@ -243,9 +233,52 @@ def get_dataloaders(
     return loaders
 
 
+def get_optimizer(models, lr):
+    params = list()
+    for model in models:
+        params += list(model.parameters())
+    return torch.optim.RAdam(params, lr=lr, decoupled_weight_decay=True)
+
+
+class fake_scheduler:
+    def step(self):
+        pass
+
+
+class multischeduler:
+    def __init__(self, schedulers):
+        self.schedulers = schedulers
+
+    def step(self):
+        for scheduler in self.schedulers:
+            scheduler.step()
+
+
+def get_scheduler(optimizer, steps):
+    if not use_scheduler:
+        return fake_scheduler()
+    if len(optimizer) == 1:
+        return torch.optim.lr_scheduler.MultiStepLR(optimizer[0], steps, gamma=0.1)
+    else:
+        schedulers = []
+        for opt in optimizer:
+            schedulers.append(
+                torch.optim.lr_scheduler.MultiStepLR(opt, steps, gamma=0.1)
+            )
+        return multischeduler(schedulers)
+
+
 def log_dict(writer, dict, step):
     for key, value in dict.items():
         writer.add_scalar(key, value, step)
+
+
+def toggle_grad(model, requires_grad=None):
+    for param in model.parameters():
+        if requires_grad is None:
+            param.requires_grad = not param.requires_grad
+        else:
+            param.requires_grad = requires_grad
 
 
 # %%

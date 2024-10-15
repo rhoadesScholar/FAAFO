@@ -28,12 +28,15 @@ from KnowledgeExpansion.training_utils import (
     log_dict,
 )
 
+batch_size /= 2  # Divide the batch size by 2 so that all the teachers can fit in memory
+batch_size = int(batch_size)
+
 
 # %%
 # Define the baseline student training function
-def expansion(seed: int):
+def ensemble_expanded(seed: int):
 
-    print(f"Knowledge expansion for student using teacher with seed {seed}")
+    print(f"Knowledge expansion for student with seed {seed} using all teachers.")
 
     # Set the random seed
     torch.manual_seed(seed)
@@ -81,7 +84,7 @@ def expansion(seed: int):
     scheduler = get_scheduler(optimizer, steps)
 
     # Make the tensorboard writer
-    writer = SummaryWriter(f"logs/committee_expansion_{seed}")
+    writer = SummaryWriter(f"logs/ensemble_expanded_{seed}")
 
     # Train the student model
     epoch_bar = tqdm(range(n_epochs))
@@ -117,7 +120,7 @@ def expansion(seed: int):
         scheduler.step()
 
         torch.save(
-            student, save_path.format(model="student_committee_expansion", seed=seed)
+            student, save_path.format(model="student_ensemble_expanded", seed=seed)
         )
 
 
@@ -125,7 +128,7 @@ if __name__ == "__main__":
     print("Starting committee knowledge expansion")
     if len(sys.argv) > 1:
         seed = int(sys.argv[1])
-        expansion(seed)
+        ensemble_expanded(seed)
     else:
         # Launch subprocesses for each seed
         for seed in seeds:
