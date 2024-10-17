@@ -50,7 +50,11 @@ def pretrain_teacher(seed: int):
 
     # Load the dataset
     loaders = get_dataloaders(
-        batch_size, num_workers, spatial_transform, gt_transform, raw_transform
+        batch_size,
+        num_workers,
+        spatial_transform,
+        gt_transform=gt_transform,
+        raw_transform=raw_transform,
     )
 
     # Define the optimizer and scheduler

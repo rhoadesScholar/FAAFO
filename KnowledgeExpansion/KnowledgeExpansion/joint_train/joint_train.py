@@ -59,7 +59,9 @@ def joint_train(seed: int):
         teacher = teacher.cuda()
 
     # Load the dataset
-    loaders = get_dataloaders(batch_size, num_workers, spatial_transform, raw_transform)
+    loaders = get_dataloaders(
+        batch_size, num_workers, spatial_transform, raw_transform=raw_transform
+    )
 
     # Define the optimizer and scheduler
     optimizer = get_optimizer([student, teacher], lr)

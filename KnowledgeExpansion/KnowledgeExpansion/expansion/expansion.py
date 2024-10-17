@@ -61,7 +61,7 @@ def expansion(seed: int):
         batch_size,
         num_workers,
         spatial_transform,
-        raw_transform,
+        raw_transform=raw_transform,
         datasets=["unlabeled"],
     )
 

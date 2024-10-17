@@ -31,9 +31,9 @@ from KnowledgeExpansion.training_utils import (
 
 # %%
 # Define the baseline student training function
-def student_baseline(seed: int):
+def student_noAugment(seed: int):
 
-    print(f"Training basic student with seed {seed}")
+    print(f"Training basic student without data augmentation with seed {seed}")
 
     # Set the random seed
     torch.manual_seed(seed)
@@ -47,9 +47,7 @@ def student_baseline(seed: int):
         student = student.cuda()
 
     # Load the dataset
-    loaders = get_dataloaders(
-        batch_size, num_workers, spatial_transform, raw_transform=raw_transform
-    )
+    loaders = get_dataloaders(batch_size, num_workers)
 
     # Define the optimizer and scheduler
     optimizer = get_optimizer([student], lr)
@@ -69,7 +67,7 @@ def student_baseline(seed: int):
         os.path.dirname(os.path.dirname(__file__)),
         "models",
         "checkpoints",
-        f"student_baseline_{seed}.pth",
+        f"student_noAugment_{seed}.pth",
     )
 
     # Train the student model
@@ -124,12 +122,12 @@ if __name__ == "__main__":
     print("Starting baseline student training")
     if len(sys.argv) > 1:
         seed = int(sys.argv[1])
-        student_baseline(seed)
+        student_noAugment(seed)
     else:
         # Launch subprocesses for each seed
         for seed in seeds:
             print(f"Launching training for seed {seed}")
-            # student_baseline(seed)
+            # student_noAugment(seed)
             os.system(launch_command.format(script=__file__, seed=seed))
 
 

@@ -31,7 +31,7 @@ class RandomSpatialAugmentation(torch.nn.Module):
 
 # %%
 # Defines the hyperparameters
-seeds = [3, 4, 13, 42, 69]
+seeds = [3, 4, 13, 42, 1337]
 lr = 1e-2
 batch_size = 128
 num_workers = 12

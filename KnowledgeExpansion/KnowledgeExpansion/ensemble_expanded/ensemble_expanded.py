@@ -65,17 +65,16 @@ def ensemble_expanded(seed: int):
                 save_path.format(model="teacher_split", seed=teacher_seed),
                 weights_only=False,
             )
-            .eval()
+            .train()
             .to("cuda" if torch.cuda.is_available() else "cpu")
         )
-    student.train()
 
     # Load the dataset
     loaders = get_dataloaders(
         batch_size,
         num_workers,
         spatial_transform,
-        raw_transform,
+        raw_transform=raw_transform,
         datasets=["val", "unlabeled"],
     )
 
@@ -95,7 +94,7 @@ def ensemble_expanded(seed: int):
         for i, batch in enumerate(train_bar):
             if torch.cuda.is_available():
                 for key in batch:
-                    batch[key] = batch[key].cuda()
+                    batch[key] = batch[key].cuda().requires_grad_(True)
 
             # Student forward pass and loss calculation
             optimizer.zero_grad()
@@ -103,7 +102,8 @@ def ensemble_expanded(seed: int):
             student_loss = torch.tensor(0.0, requires_grad=True).cuda()
             losses = []
             for teacher in teachers:
-                loss = teacher(batch["image"], student_output).mean()
+                with torch.no_grad():
+                    loss = teacher(batch["image"], student_output).mean()
                 losses.append(loss.item())
                 student_loss += loss
 
@@ -137,9 +137,9 @@ def ensemble_expanded(seed: int):
 
                 student_pred_loss = torch.tensor(0.0).cuda()
                 for teacher in teachers:
-                    loss = teacher(batch["image"], student_output)
+                    loss = teacher(batch["image"], student_output).mean()
                     losses.append(loss.item())
-                    student_pred_loss += loss.mean()
+                    student_pred_loss += loss
                 total_student_pred_loss += student_pred_loss.item() / len(teachers)
             writer.add_histogram(
                 "Val_Student_Pred_Loss",
