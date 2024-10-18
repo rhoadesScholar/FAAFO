@@ -15,6 +15,18 @@ from KnowledgeExpansion.training_utils import (
 import torch
 
 
+STUDENT_TYPE_COLORS = {
+    "baseline": "blue",
+    "noAugment": "black",
+    "gtAugment": "green",
+    # "joint": "green",
+    # "split": "green",
+    # "expansion": "red",
+    # "ensemble_expanded": "orange",
+    # "ensemble_alternating": "cyan",
+}
+
+
 def accuracy(y_true, y_pred):
     """
     Compute the accuracy of the predicted segmentation mask.
@@ -101,25 +113,77 @@ def calibration_error(y_true, y_pred, num_bins=15):
             avg_confidence_in_bin = y_pred[in_bin].mean()
             ece += np.abs(avg_confidence_in_bin - accuracy_in_bin) * proportion_in_bin
             mce = max(mce, np.abs(avg_confidence_in_bin - accuracy_in_bin))
-            accs.append(accuracy_in_bin)
-            confs.append(avg_confidence_in_bin)
+            accs.append(float(accuracy_in_bin))
+            confs.append(float(avg_confidence_in_bin))
 
     return ece, float(mce), accs, confs
 
 
-def plot_calibration_curves(accs_dict, confs_dict, ece_dict, mce_dict):
+def get_dicts(
+    accs_dict=None,
+    confs_dict=None,
+    ece_dict=None,
+    mce_dict=None,
+    ious_dict=None,
+    accuracy_dict=None,
+):
+    """
+    Load the accuracy, confidence, ECE, MCE dictionaries from the local files if neccessary.
+    """
+    if accs_dict is None:
+        try:
+            with open("accs.txt", "r") as f:
+                accs_dict = json.load(f)
+        except FileNotFoundError:
+            print("accs_dict not passed and accs.txt not found")
+    if confs_dict is None:
+        try:
+            with open("confs.txt", "r") as f:
+                confs_dict = json.load(f)
+        except FileNotFoundError:
+            print("confs_dict not passed and confs.txt not found")
+    if ece_dict is None:
+        try:
+            with open("ece.txt", "r") as f:
+                ece_dict = json.load(f)
+        except FileNotFoundError:
+            print("ece_dict not passed and ece.txt not found")
+    if mce_dict is None:
+        try:
+            with open("mce.txt", "r") as f:
+                mce_dict = json.load(f)
+        except FileNotFoundError:
+            print("mce_dict not passed and mce.txt not found")
+    if ious_dict is None:
+        try:
+            with open("ious.txt", "r") as f:
+                ious_dict = json.load(f)
+        except FileNotFoundError:
+            print("ious_dict not passed and ious.txt not found")
+    if accuracy_dict is None:
+        try:
+            with open("accuracy.txt", "r") as f:
+                accuracy_dict = json.load(f)
+        except FileNotFoundError:
+            print("accuracy_dict not passed and accuracy.txt not found")
+    return accs_dict, confs_dict, ece_dict, mce_dict, ious_dict, accuracy_dict
+
+
+def plot_calibration_curves(
+    accs_dict=None, confs_dict=None, ece_dict=None, mce_dict=None
+):
     """
     Plot the calibration curves of the student models.
 
     Parameters
     ----------
-    accs_dict : dict
-        Dictionary containing the accuracies of the student models.
-    confs_dict : dict
+    accs_dict : dict, optional (default=None)
+        Dictionary containing the accuracies of the student models. If not passed, will load from the local `accuracy.txt` file.
+    confs_dict : dict, optional (default=None)
         Dictionary containing the confidences of the student models.
-    ece_dict : dict
+    ece_dict : dict, optional (default=None)
         Dictionary containing the Expected Calibration Error (ECE) of the student models.
-    mce_dict : dict
+    mce_dict : dict, optional (default=None)
         Dictionary containing the Maximum Calibration Error (MCE) of the student models.
 
     Returns
@@ -127,34 +191,29 @@ def plot_calibration_curves(accs_dict, confs_dict, ece_dict, mce_dict):
     matplotlib.pyplot.Figure
         The calibration curves.
     """
-    student_type_colors = {
-        "baseline": "blue",
-        # "joint": "green",
-        "split": "purple",
-        # "expansion": "red",
-        "ensemble_expanded": "orange",
-        "ensemble_alternating": "cyan",
-    }
-    num_types = len(student_type_colors)
+    accs_dict, confs_dict, ece_dict, mce_dict, _, _ = get_dicts(
+        accs_dict, confs_dict, ece_dict, mce_dict
+    )
+    num_types = len(STUDENT_TYPE_COLORS)
     # num_students = len(accs_dict) // num_types + 1
     num_students = 5
     fig, axes = plt.subplots(
         nrows=num_types,
-        ncols=num_students,
+        ncols=num_students + 1,
         figsize=(5 * num_students, 5 * num_types),
         sharex=True,
         sharey=True,
     )
-    avg_accs = {k: [] for k in student_type_colors.keys()}
-    avg_confs = {k: [] for k in student_type_colors.keys()}
-    avg_ece = {k: [] for k in student_type_colors.keys()}
-    avg_mce = {k: [] for k in student_type_colors.keys()}
-    student_inds = {k: 0 for k in student_type_colors.keys()}
+    avg_accs = {k: [] for k in STUDENT_TYPE_COLORS.keys()}
+    avg_confs = {k: [] for k in STUDENT_TYPE_COLORS.keys()}
+    avg_ece = {k: [] for k in STUDENT_TYPE_COLORS.keys()}
+    avg_mce = {k: [] for k in STUDENT_TYPE_COLORS.keys()}
+    student_inds = {k: 0 for k in STUDENT_TYPE_COLORS.keys()}
     # Plot the calibration curves
     for student_name, accs in accs_dict.items():
         confs = confs_dict[student_name]
         found = False
-        for i, (student_type, color) in enumerate(student_type_colors.items()):
+        for i, (student_type, color) in enumerate(STUDENT_TYPE_COLORS.items()):
             if student_type in student_name:
                 avg_accs[student_type].append(accs)
                 avg_confs[student_type].append(confs)
@@ -163,7 +222,7 @@ def plot_calibration_curves(accs_dict, confs_dict, ece_dict, mce_dict):
                 found = True
                 break
         if not found:
-            raise ValueError(f"Student type not found in {student_name}")
+            continue
         j = student_inds[student_type]
         # Add ECE and MCE values to the legend
         result_string = f"{student_name}:\nECE = {ece_dict[student_name]:.4f},\nMCE = {mce_dict[student_name]:.4f}"
@@ -176,7 +235,7 @@ def plot_calibration_curves(accs_dict, confs_dict, ece_dict, mce_dict):
         student_inds[student_type] += 1
 
     # Now plot the averages
-    for j, (student_type, color) in enumerate(student_type_colors.items()):
+    for j, (student_type, color) in enumerate(STUDENT_TYPE_COLORS.items()):
         accs_std = np.std(avg_accs[student_type], axis=0)
         avg_accs[student_type] = np.mean(avg_accs[student_type], axis=0)
         confs_std = np.std(avg_confs[student_type], axis=0)
@@ -206,6 +265,61 @@ def plot_calibration_curves(accs_dict, confs_dict, ece_dict, mce_dict):
     return plt.gcf()
 
 
+def plot_statistics(
+    **dicts,
+):
+    """
+    Plot the statistics of the student models in bar plots.
+    """
+    dicts = get_dicts(**dicts)
+    dicts = {
+        k: v
+        for k, v in zip(
+            [
+                "accs",
+                "confs",
+                "Expected Calibration Error (ECE)",
+                "Maximum Calibration Error (MCE)",
+                "Intersection over Union (IoU)",
+                "Accuracy",
+            ],
+            dicts,
+        )
+    }
+    figs = []
+    for k, d in dicts.items():
+        if d is not None and k not in ["accs", "confs"]:
+            # Make a barplot of mean and std for each student type
+            # First calculate the means and stds for each student type
+            values_dict = {}
+            for student_name, values in d.items():
+                for student_type in STUDENT_TYPE_COLORS.keys():
+                    if student_type in student_name:
+                        print(f"Adding {student_name} to {student_type}")
+                        if student_type not in values_dict:
+                            values_dict[student_type] = []
+                        values_dict[student_type].append(values)
+                        break
+
+            # Now calculate the means and stds for each student type
+            means = {k: np.mean(v) for k, v in values_dict.items()}
+            stds = {k: np.std(v) for k, v in values_dict.items()}
+            fig = plt.figure()
+            plt.bar(means.keys(), means.values(), yerr=stds.values())
+            plt.xlabel("Student Type")
+            plt.ylabel(k)
+            plt.title(f"{k} of Student Models")
+            plt.xticks(rotation=45)
+            plt.tight_layout()
+            plt.show()
+            # fig = plt.gcf()
+            fig.savefig(f"{k}.png")
+
+    figs.append(fig)
+
+    return figs
+
+
 def main():
     """
     Calculate the Expected Calibration Error (ECE) and the Maximum Calibration Error (MCE) of the student models for each condition.
@@ -228,6 +342,14 @@ def main():
     accuracy_dict = {}
 
     for student_path in student_paths:
+        found = False
+        for student_type in STUDENT_TYPE_COLORS.keys():
+            if student_type in student_path:
+                found = True
+                break
+        if not found:
+            print(f"Skipping {student_path}")
+            continue
         print(f"Calculating calibration error for {student_path}")
         # Load the student model
         student = torch.load(student_path, weights_only=False)
@@ -272,24 +394,44 @@ def main():
         )
         print(f"\tECE = {ece:.4f}\n\tMCE = {mce:.4f}")
 
-    # Plot the calibration curves
-    print("Plotting calibration curves")
-    fig = plot_calibration_curves(accs_dict, confs_dict, ece_dict, mce_dict)
-
-    return fig, ece_dict, mce_dict, accs_dict, confs_dict, ious_dict, accuracy_dict
+    return ece_dict, mce_dict, accs_dict, confs_dict, ious_dict, accuracy_dict
 
 
 # %%
 if __name__ == "__main__":
     if len(sys.argv) > 1:
-        fig, ece_dict, mce_dict, accs_dict, confs_dict, ious_dict, accuracy_dict = (
-            main()
-        )
-        fig.savefig("calibration_curves.png")
-        res_names = ["ece", "mce", "ious", "accuracy"]
-        for i, results in enumerate([ece_dict, mce_dict, ious_dict, accuracy_dict]):
-            with open(f"{res_names[i]}.txt", "w") as f:
-                json.dump(results, f)
+        if sys.argv[1] == "plot":
+            fig = plot_calibration_curves()
+            fig.savefig("calibration_curves.png")
+            figs = plot_statistics()
+            # fig.savefig("statistics.png")
+        elif sys.argv[1] == "all_calib":
+            ece_dict, mce_dict, accs_dict, confs_dict, ious_dict, accuracy_dict = main()
+            res_names = ["accs", "confs", "ece", "mce", "ious", "accuracy"]
+            for i, results in enumerate(
+                [accs_dict, confs_dict, ece_dict, mce_dict, ious_dict, accuracy_dict]
+            ):
+                with open(f"{res_names[i]}.txt", "w") as f:
+                    json.dump(results, f)
+
+            # Plot the calibration curves
+            print("Plotting calibration curves")
+            fig = plot_calibration_curves(accs_dict, confs_dict, ece_dict, mce_dict)
+            fig.savefig("calibration_curves.png")
+
+            figs = plot_statistics(
+                **{
+                    "accs_dict": accs_dict,
+                    "confs_dict": confs_dict,
+                    "ece_dict": ece_dict,
+                    "mce_dict": mce_dict,
+                    "ious_dict": ious_dict,
+                    "accuracy_dict": accuracy_dict,
+                },
+            )
+            # fig.savefig("statistics.png")
+        else:
+            print("What's your goal here buddy?")
     else:
         success = os.system(launch_command.format(script=__file__, seed="all_calib"))
         if success == 0:
