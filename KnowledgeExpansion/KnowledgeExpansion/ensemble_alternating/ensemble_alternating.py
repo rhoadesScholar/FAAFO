@@ -52,19 +52,22 @@ def ensemble_alternating(seed: int):
     save_path = save_path + os.path.sep + "{model}_{seed}.pth"
 
     # Load the models
-    student = (
-        torch.load(
-            save_path.format(model="student_split", seed=seed), weights_only=False
-        )
-        .train()
-        .to("cuda" if torch.cuda.is_available() else "cpu")
-    )
+    from KnowledgeExpansion.models import student
+
+    # student = (
+    #     torch.load(
+    #         save_path.format(model="student_joint", seed=seed), weights_only=False
+    #     )
+    #     .train()
+    #     .to("cuda" if torch.cuda.is_available() else "cpu")
+    # )
+
     # Load all the teacher models
     teachers = []
     for teacher_seed in seeds:
         teachers.append(
             torch.load(
-                save_path.format(model="teacher_split", seed=teacher_seed),
+                save_path.format(model="teacher_joint", seed=teacher_seed),
                 weights_only=False,
             )
             .train()

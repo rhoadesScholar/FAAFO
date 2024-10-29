@@ -22,8 +22,8 @@ STUDENT_TYPE_COLORS = {
     # "joint": "green",
     # "split": "green",
     # "expansion": "red",
-    # "ensemble_expanded": "orange",
-    # "ensemble_alternating": "cyan",
+    "ensemble_expanded": "orange",
+    "ensemble_alternating": "cyan",
 }
 
 

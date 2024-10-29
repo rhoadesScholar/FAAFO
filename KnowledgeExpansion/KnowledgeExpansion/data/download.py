@@ -4,18 +4,21 @@ import subprocess
 from glob import glob
 
 # Set datasplit percentages and seed
-train_percentage = 0.8
+train_percentage = 0.15
 val_percentage = 0.15
-test_percentage = 0.05
+test_percentage = 0.15
 
-seed = 42
+seed = 13
 
 mitolab_prefix = os.path.join(os.path.dirname(__file__), "CEM-MitoLab")
 cem_prefix = os.path.join(os.path.dirname(__file__), "CEM1500k_unlabelled")
 
-assert (
-    train_percentage + val_percentage + test_percentage == 1.0
-), "The sum of the train, validation, and test percentages must be equal to 1."
+if not (train_percentage + val_percentage + test_percentage == 1.0):
+    print("The sum of the train, validation, and test percentages must be equal to 1.")
+    print("Training percentage: ", train_percentage)
+    print("Validation percentage: ", val_percentage)
+    print("Test percentage: ", test_percentage)
+    print("Make sure this is your desired split before continuing.")
 
 
 def download_empiar_dataset(dataset_id, output_dir):
@@ -75,7 +78,7 @@ if __name__ == "__main__":
         shell=True,
     )
 
-    # Split the CEM-MitoLab dataset into training (80%), validation (15%), and test (5%) sets
+    # Split the CEM-MitoLab dataset into training (15%), validation (15%), and test (15%) sets
     # Create directories for each dataset type
     data_paths = {}
     for dataset_type in ["train", "val", "test"]:
