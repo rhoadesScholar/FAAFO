@@ -17,8 +17,8 @@ Additionally, I experimented with randomly augmenting the GT masks during studen
 To install the required packages, run the following command from the root directory of this repository:
 
 ```bash
-micromamba env create -n KE python==3.11 -f requirements.txt -c pytorch -c nvidia -y
-micromamba activate KE
+micromamba env create -n BvD python==3.11 -f requirements.txt -c pytorch -c nvidia -y
+micromamba activate BvD
 pip install -e .
 ```
 
