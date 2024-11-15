@@ -27,7 +27,7 @@ STUDENT_TYPE_COLORS = {
 }
 
 
-def accuracy(y_true, y_pred):
+def accuracy(y_true, y_pred, threshold = 0.5):
     """
     Compute the accuracy of the predicted segmentation mask.
 
@@ -36,7 +36,9 @@ def accuracy(y_true, y_pred):
     y_true : array-like of shape (n_samples,)
         True labels.
     y_pred : array-like of shape (n_samples,)
-        Predicted probabilities (after softmax or sigmoid).
+        Predicted probabilities (after softmax or sigmoid) or distances.
+    threshold : float, optional (default=0.5)
+        Threshold for the predicted probabilities or distances.
 
     Returns
     -------
@@ -44,12 +46,12 @@ def accuracy(y_true, y_pred):
         Accuracy value.
     """
     y_true = np.array(y_true).astype(bool)
-    y_pred = np.array(y_pred) > 0.5
+    y_pred = np.array(y_pred) > threshold
     accuracy = (y_true == y_pred).mean()
     return accuracy
 
 
-def iou(y_true, y_pred):
+def iou(y_true, y_pred, threshold = 0.5):
     """
     Compute the Intersection over Union (IoU) of the predicted segmentation mask.
 
@@ -58,7 +60,9 @@ def iou(y_true, y_pred):
     y_true : array-like of shape (n_samples,)
         True labels.
     y_pred : array-like of shape (n_samples,)
-        Predicted probabilities (after softmax or sigmoid).
+        Predicted probabilities (after softmax or sigmoid) or distances.
+    threshold : float, optional (default=0.5)
+        Threshold for the predicted probabilities or distances.
 
     Returns
     -------
@@ -66,7 +70,7 @@ def iou(y_true, y_pred):
         IoU value.
     """
     y_true = np.array(y_true).astype(bool)
-    y_pred = np.array(y_pred) > 0.5
+    y_pred = np.array(y_pred) > threshold
     intersection = np.logical_and(y_true, y_pred).sum()
     union = np.logical_or(y_true, y_pred).sum()
     iou = intersection / union
@@ -168,6 +172,20 @@ def get_dicts(
             print("accuracy_dict not passed and accuracy.txt not found")
     return accs_dict, confs_dict, ece_dict, mce_dict, ious_dict, accuracy_dict
 
+def get_student_type(student_name, types):
+    """
+    Get the student type from the student name.
+    """
+    types = list(types)
+    for i, student_type in enumerate(types):
+        if student_type in student_name:
+            _, other_student_type = get_student_type(student_name, types[:i] + types[i+1:])
+            if other_student_type:
+                student_type = other_student_type
+                i = types.index(student_type)
+            return i, student_type
+    # print(f"Student type not found for {student_name}")
+    return -1, None
 
 def plot_calibration_curves(
     accs_dict=None, confs_dict=None, ece_dict=None, mce_dict=None
@@ -212,18 +230,19 @@ def plot_calibration_curves(
     # Plot the calibration curves
     for student_name, accs in accs_dict.items():
         confs = confs_dict[student_name]
-        found = False
-        for i, (student_type, color) in enumerate(STUDENT_TYPE_COLORS.items()):
-            if student_type in student_name:
-                avg_accs[student_type].append(accs)
-                avg_confs[student_type].append(confs)
-                avg_ece[student_type].append(ece_dict[student_name])
-                avg_mce[student_type].append(mce_dict[student_name])
-                found = True
-                break
-        if not found:
+
+        i, student_type = get_student_type(student_name, STUDENT_TYPE_COLORS.keys())
+        if not student_type:
+            f"Student type not found for {student_name}"
             continue
+        color = STUDENT_TYPE_COLORS[student_type]
+
+        avg_accs[student_type].append(accs)
+        avg_confs[student_type].append(confs)
+        avg_ece[student_type].append(ece_dict[student_name])
+        avg_mce[student_type].append(mce_dict[student_name])
         j = student_inds[student_type]
+
         # Add ECE and MCE values to the legend
         result_string = f"{student_name}:\nECE = {ece_dict[student_name]:.4f},\nMCE = {mce_dict[student_name]:.4f}"
         axes[i, j].bar(confs, accs, width=0.1, label=result_string, color=color)
@@ -293,13 +312,12 @@ def plot_statistics(
             # First calculate the means and stds for each student type
             values_dict = {}
             for student_name, values in d.items():
-                for student_type in STUDENT_TYPE_COLORS.keys():
-                    if student_type in student_name:
-                        print(f"Adding {student_name} to {student_type}")
-                        if student_type not in values_dict:
-                            values_dict[student_type] = []
-                        values_dict[student_type].append(values)
-                        break
+                _, student_type = get_student_type(student_name, STUDENT_TYPE_COLORS.keys())
+                if student_type:
+                    print(f"Adding {student_name} to {student_type}")
+                    if student_type not in values_dict:
+                        values_dict[student_type] = []
+                    values_dict[student_type].append(values)
 
             # Now calculate the means and stds for each student type
             means = {k: np.mean(v) for k, v in values_dict.items()}
@@ -331,7 +349,7 @@ def main():
     loaders = get_dataloaders(batch_size, num_workers, datasets=["test"])
 
     # Get the student model checkpoint paths
-    student_paths = glob("models/checkpoints/student_*.pth")
+    student_paths = glob("models/checkpoints/*.pth")
 
     # Initialize the ECE, MCE, accs, and confs dictionaries
     ece_dict = {}
@@ -374,15 +392,17 @@ def main():
                 output = student(image)
 
                 # Calculate the predicted probabilities
-                prob = torch.sigmoid(output)
+                if "binary" in student_name:
+                    output = torch.sigmoid(output)
 
                 # Append the true and predicted labels
                 y_true.extend(mask.cpu().numpy().flatten())
-                y_pred.extend(prob.cpu().numpy().flatten())
+                y_pred.extend(output.cpu().numpy().flatten())
 
         # Calculate the ECE and MCE
-        ious_dict[student_name] = iou(y_true, y_pred)
-        accuracy_dict[student_name] = accuracy(y_true, y_pred)
+        threshold = 0.5 if "binary" in student_name else 0
+        ious_dict[student_name] = iou(y_true, y_pred, threshold)
+        accuracy_dict[student_name] = accuracy(y_true, y_pred, threshold)
         ece, mce, accs, confs = calibration_error(np.array(y_true), np.array(y_pred))
         ece_dict[student_name] = ece
         mce_dict[student_name] = mce

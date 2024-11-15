@@ -4,7 +4,7 @@ setup(
     # package information
     name="Binary_V_Distance",
     version="1.0.0",
-    description="Direct comparisons of BCE vs. distance prediction",
+    description="Direct comparisons of binary mask vs. distance prediction",
     author="Jeff Rhoades <rhoadesj@hhmi.org>",
     # dependencies
     install_requires=[

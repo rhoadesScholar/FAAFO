@@ -17,7 +17,6 @@ from Binary_V_Distance.training_utils import (
     get_optimizer,
     get_scheduler,
     spatial_transform,
-    gt_transform,
     raw_transform,
     launch_command,
     seeds,
