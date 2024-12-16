@@ -1,6 +1,6 @@
 # Binary Cross-Entropy versus MSE on Distance and Signed-distance
 
-This repository contains the code for the study "Binary Cross-Entropy versus MSE on Distance and Signed-distance" by Jeff Rhoades (@rhoadesScholar), accepted at some conference hopefully.
+This repository contains the code for the study "Binary Cross-Entropy versus MSE on Distance and Signed-distance" by Jeff Rhoades (@rhoadesScholar), accepted by the FAAFO Consortium of Rhoades.
 
 ## Goal
 
