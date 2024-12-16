@@ -1,10 +1,11 @@
+# %%
 import matplotlib.pyplot as plt
 import numpy as np
 
 # Data for the plot
 x = np.linspace(0, 100, 500)
-L = 100  # Maximum value of y
-k = 0.08  # Steepness of the curve
+L = 99  # Maximum value of y
+k = 0.1  # Steepness of the curve
 x0 = 50  # Midpoint (x-value where y is half of L)
 
 # Sigmoid function
@@ -23,3 +24,5 @@ plt.gca().set_ylim(0, 100)
 plt.show()
 
 plt.savefig("knowledge_creation.png")
+
+# %%
