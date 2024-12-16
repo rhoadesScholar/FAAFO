@@ -360,13 +360,9 @@ def main():
     accuracy_dict = {}
 
     for student_path in student_paths:
-        found = False
-        for student_type in STUDENT_TYPE_COLORS.keys():
-            if student_type in student_path:
-                found = True
-                break
-        if not found:
-            print(f"Skipping {student_path}")
+        _, student_type = get_student_type(student_path, STUDENT_TYPE_COLORS.keys())
+        if not student_type:
+            print(f"Student type not found for {student_path}")
             continue
         print(f"Calculating calibration error for {student_path}")
         # Load the student model

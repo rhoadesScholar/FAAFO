@@ -1,6 +1,6 @@
 # Knowledge Expansion via Error Distribution Prediction
 
-This repository contains the code for the future paper "Knowledge Expansion via Error Distribution Prediction" accepted at some conference hopefully.
+This repository contains the code for the study "Knowledge Expansion via Error Distribution Prediction" accepted at some conference hopefully.
 
 ## Hypothesis
 
@@ -11,6 +11,8 @@ I hypothesize that a teacher model can predict the error distribution of a stude
 The results of this study suggest that training a student model with a teacher model's error distribution prediction does not improve the student model's performance. Particularly, the student model trained with the teacher model's error distribution prediction on an external, unlabeled, dataset, drastically degraded the performance of the student model. The student model trained with the teacher model's error distribution prediction alongside actual GT data performed similarly to the student model trained with only GT data. This effect was not improved by use of an ensemble of teacher models.
 
 Additionally, I experimented with randomly augmenting the GT masks during student training, and found that this did not largely affect the performance of the student model. If anything, it improved the ECE of the student model.
+
+![Calibration curves](KnowledgeExpansion/calibration_curves.png)
 
 ## Setup
 

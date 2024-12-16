@@ -355,13 +355,9 @@ def main():
     accuracy_dict = {}
 
     for student_path in student_paths:
-        found = False
-        for student_type in STUDENT_TYPE_COLORS.keys():
-            if student_type in student_path:
-                found = True
-                break
-        if not found:
-            print(f"Skipping {student_path}")
+        _, student_type = get_student_type(student_path, STUDENT_TYPE_COLORS.keys())
+        if not student_type:
+            print(f"Student type not found for {student_path}")
             continue
         print(f"Calculating calibration error for {student_path}")
         # Load the student model
@@ -395,7 +391,7 @@ def main():
                 y_pred.extend(output.cpu().numpy().flatten())
 
         # Calculate the ECE and MCE
-        threshold = 0.5 if "binary" in student_name else 0
+        threshold = 0.5 if "BCE" in student_name else 0
         ious_dict[student_name] = iou(y_true, y_pred, threshold)
         accuracy_dict[student_name] = accuracy(y_true, y_pred, threshold)
         ece, mce, accs, confs = calibration_error(np.array(y_true), np.array(y_pred))
