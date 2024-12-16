@@ -10,6 +10,8 @@ This is an observational study to determine the effect of using Binary Cross-Ent
 
 The results show that using distance and signed-distance as targets in a regressive task (MSE) does not improve the performance of the model compared to using binary targets (BCE). The results suggest that the computational and algorithmic complexities introduced by the use of distance and signed-distance are not worth the effort in this context. In fact, the results show that using distance and signed-distance as targets can lead to worse performance compared to using binary targets. This may not be the case for objects with more complex shapes (for instance thin, elongated and/or branching, such as neurons or endoplasmic reticulum), but for the simple shapes of mitochondria in FIBSEM images, binary targets are sufficient.
 
+Below are thresholded masks of the GT targets and associated the model's output.
+
 ![Results](Binary_V_Distance/qualitative_comparison.png)
 
 ## Setup
