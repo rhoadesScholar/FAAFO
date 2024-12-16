@@ -1,6 +1,6 @@
 # Knowledge Expansion via Error Distribution Prediction
 
-This repository contains the code for the study "Knowledge Expansion via Error Distribution Prediction" accepted at some conference hopefully.
+This repository contains the code for the study "Knowledge Expansion via Error Distribution Prediction" accepted by the FAAFO Consortium of Rhoades.
 
 ## Hypothesis
 
