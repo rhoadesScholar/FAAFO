@@ -21,7 +21,7 @@ plt.legend()
 plt.grid(True, linestyle="--", linewidth=0.5)
 plt.gca().set_xlim(0, 100)
 plt.gca().set_ylim(0, 100)
-plt.show()
+# plt.show()
 
 plt.savefig("knowledge_creation.png")
 
