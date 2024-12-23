@@ -4,7 +4,20 @@ This repository contains the code for the study "Fourier Space Segmentation" by 
 
 ## Goal
 
-This is an observational study to determine the effect of 
+This is an observational study to determine the feasibility of using a Fourier space representation of an image to segment objects in the image. The Fourier transform represents an image in terms of its frequency components (both spatial and temporal). The key idea is that certain patterns or objects might be better recognized in the frequency domain rather than the spatial domain.
+	•	Localized patterns: Objects with certain symmetry, periodicity, or frequency characteristics might be more easily recognized in the Fourier domain.
+	•	Noise reduction: The Fourier transform can help in removing high-frequency noise and emphasizing low-frequency components that carry more of the object’s global structure.
+	•	Invariance: Fourier representations can be more invariant to certain transformations like rotation or scaling, depending on the type of transform used.
+
+Fourier domain for object recognition has been explored in specialized areas such as:
+	•	Texture recognition: Fourier transforms are often used for analyzing textures, where periodic patterns are key.
+	•	Motion recognition: For video or time-series images, the Fourier domain might help capture temporal patterns.
+	•	Pattern matching: In cases where objects have specific frequency signatures, such as certain shapes or repetitive patterns, the Fourier domain could help.
+
+Consider the information density over the course of downsampling, for instance (taken from "Spectral Representations for Convolutional Neural Networks" by Rippel et al., 2015):
+![Figure 2 from Spectral Representations for Convolutional Neural Networks, 2015](image.png)
+
+The study uses the Mito-Lab dataset to segment mitochondria in electron microscopy images.
 
 ## Findings
 
