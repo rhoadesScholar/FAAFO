@@ -19,6 +19,12 @@ Example::
     )
     # ... use `opt` exactly like a normal optimizer.
 """
+from .mutation_counts import (
+    Fixed,
+    FractionOverGate,
+    GradientScaled,
+    MutationCount,
+)
 from .mutations import (
     CallableMutator,
     ChaoticMutator,
@@ -36,6 +42,10 @@ __all__ = [
     "UniformMutator",
     "ChaoticMutator",
     "CallableMutator",
+    "MutationCount",
+    "Fixed",
+    "FractionOverGate",
+    "GradientScaled",
 ]
 
 __version__ = "1.0.0"

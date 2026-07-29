@@ -16,6 +16,7 @@ setup(
         "setuptools",
         "wheel",
         "torch",
+        "torchvision",
         "numpy",
         "matplotlib",
     ],

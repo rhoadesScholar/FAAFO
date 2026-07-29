@@ -5,6 +5,7 @@ Run with ``pytest`` or directly as ``python -m ProbabilisticOptimizers.tests``.
 """
 import torch
 
+from .mutation_counts import Fixed, FractionOverGate, GradientScaled
 from .mutations import (
     ChaoticMutator,
     NormalMutator,
@@ -166,6 +167,112 @@ def test_state_dict_roundtrip():
     opt2.load_state_dict(sd)
     assert opt2.threshold == 0.5
     assert opt2.num_mutations == 3.0
+
+
+def test_gate_high_selects_upper_quantile():
+    base = torch.optim.SGD([torch.zeros(1, requires_grad=True)], lr=0.1)
+    opt = ProbabilisticOptimizer(
+        base, gate="high", threshold_mode="quantile", threshold=0.5, num_mutations=10.0
+    )
+    grad = torch.tensor([0.1, 0.2, 5.0, 6.0])  # median = 2.6
+    probs = opt.mutation_probabilities(grad)
+    assert probs[0].item() == 0.0 and probs[1].item() == 0.0
+    assert probs[2].item() > 0.0 and probs[3].item() > 0.0
+
+
+def test_gate_low_selects_lower_quantile():
+    base = torch.optim.SGD([torch.zeros(1, requires_grad=True)], lr=0.1)
+    opt = ProbabilisticOptimizer(
+        base, gate="low", threshold_mode="quantile", threshold=0.5,
+        weight_by="neg_grad", num_mutations=10.0,
+    )
+    grad = torch.tensor([0.1, 0.2, 5.0, 6.0])
+    probs = opt.mutation_probabilities(grad)
+    # Lower half eligible; smallest gradient gets the most mass.
+    assert probs[2].item() == 0.0 and probs[3].item() == 0.0
+    assert probs[0].item() > 0.0 and probs[0].item() >= probs[1].item()
+
+
+def test_gate_none_all_eligible():
+    base = torch.optim.SGD([torch.zeros(1, requires_grad=True)], lr=0.1)
+    opt = ProbabilisticOptimizer(base, gate="none", num_mutations=100.0)
+    grad = torch.tensor([0.0, 0.1, 0.2, 0.3])
+    probs = opt.mutation_probabilities(grad)
+    assert torch.all(probs > 0.0)  # even the zero-gradient entry
+
+
+def test_neg_grad_weighting_favors_small_gradients():
+    base = torch.optim.SGD([torch.zeros(1, requires_grad=True)], lr=0.1)
+    opt = ProbabilisticOptimizer(base, gate="none", weight_by="neg_grad", num_mutations=1.0)
+    grad = torch.tensor([0.1, 10.0])
+    probs = opt.mutation_probabilities(grad)
+    assert probs[0].item() > probs[1].item()
+
+
+def test_fraction_over_gate_count():
+    base = torch.optim.SGD([torch.zeros(1, requires_grad=True)], lr=0.1)
+    counter = FractionOverGate(fraction=0.1)
+    opt = ProbabilisticOptimizer(
+        base, gate="high", threshold_mode="quantile", threshold=0.5,
+        num_mutations=counter, temperature=1e6,  # ~uniform over eligible
+    )
+    grad = torch.arange(1, 101, dtype=torch.float32)  # 100 entries, ~50 eligible
+    probs = opt.mutation_probabilities(grad)
+    # Expected count ~ 0.1 * 50 = 5; sum of Bernoulli probs approximates it.
+    assert 3.0 < probs.sum().item() < 7.0
+
+
+def test_gradient_scaled_count_tracks_magnitude():
+    base = torch.optim.SGD([torch.zeros(1, requires_grad=True)], lr=0.1)
+    counter = GradientScaled(scale=2.0, stat="mean", region="all")
+    small = counter(torch.full((10,), 0.5), torch.ones(10, dtype=torch.bool))
+    big = counter(torch.full((10,), 5.0), torch.ones(10, dtype=torch.bool))
+    assert big > small
+    assert abs(big - 10.0) < 1e-4  # 2.0 * mean(5.0)
+
+
+def test_callable_num_mutations_in_step():
+    torch.manual_seed(0)
+    p = torch.nn.Parameter(torch.zeros(200))
+    base = torch.optim.SGD([p], lr=1.0)
+    opt = ProbabilisticOptimizer(
+        base, mutator=NormalMutator(std=1.0), gate="none",
+        num_mutations=Fixed(20.0), generator=_gen(0),
+    )
+    p.grad = torch.ones(200)
+    opt.step()
+    assert opt.last_num_mutated > 0
+
+
+def test_gate_low_dead_units_mutate_while_high_gate_does_not():
+    # At a "settled minimum" all grads are ~0: high gate mutates nothing,
+    # low gate still resamples.
+    grad = torch.full((100,), 1e-9)
+    hi = ProbabilisticOptimizer(
+        torch.optim.SGD([torch.zeros(1, requires_grad=True)], lr=0.1),
+        gate="high", threshold_mode="abs", threshold=1e-3, num_mutations=10.0,
+    )
+    lo = ProbabilisticOptimizer(
+        torch.optim.SGD([torch.zeros(1, requires_grad=True)], lr=0.1),
+        gate="low", threshold_mode="abs", threshold=1e-3,
+        weight_by="neg_grad", num_mutations=10.0,
+    )
+    assert hi.mutation_probabilities(grad).sum().item() == 0.0
+    assert lo.mutation_probabilities(grad).sum().item() > 0.0
+
+
+def test_invalid_gate_and_mode_raise():
+    base = torch.optim.SGD([torch.zeros(1, requires_grad=True)], lr=0.1)
+    try:
+        ProbabilisticOptimizer(base, gate="sideways")
+        assert False
+    except ValueError:
+        pass
+    try:
+        ProbabilisticOptimizer(base, threshold_mode="fuzzy")
+        assert False
+    except ValueError:
+        pass
 
 
 def _main():
