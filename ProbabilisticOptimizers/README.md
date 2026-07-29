@@ -4,6 +4,29 @@ This repository contains the code for the study "Probabilistic Optimizers:
 gradient-weighted parameter resampling as a drop-in exploration hook" by Jeff
 Rhoades (@rhoadesScholar), submitted to the FAAFO Consortium of Rhoades.
 
+## Conclusion (TL;DR)
+
+**It doesn't work — and finding out *why* was the fun part.** The idea was to
+wrap any optimizer with a hook that resamples high-gradient weights per layer,
+with mutation probability set by a softmax over gradient magnitudes. On
+Rastrigin it *looked* like a ~20–30% win, but that was an artifact of the
+**best-so-far** metric: a controlled best-of-N probe reproduced most of the gain
+at zero cost to the deployed model, and the actual settled solution was ~2×
+*worse* than plain Adam. On real training (MNIST) and a noisy synthetic task the
+verdict is consistent and, over tight paired seeds, statistically clear: every
+variant is neutral-to-harmful, the reachable accuracy is never improved, and the
+scheme's two central design choices both fail their controls — gating on **high**
+gradients is the *worst* gate (perturbing the weights the optimizer is actively
+moving fights it hardest; **inverting** the gate to hit stuck weights is the
+safest), and the **gradient-weighted softmax buys nothing** over picking the same
+weights uniformly. Adaptive mutation counts tied to gradient magnitude are an
+outright footgun (they concentrate disruption early, when the model is most
+fragile). Net: gradient-weighted resampling is at best a descent-time jitter, not
+a better optimizer or a useful regularizer. The lasting lesson for the ledger:
+**if a stochastic trick only shines under best-so-far, report the settled iterate
+too — it usually tells a different story.** (Full methods, plots, and controls
+below.)
+
 ## Idea
 
 Take **any** off-the-shelf optimizer (Adam, SGD, ...) and, after each ordinary
