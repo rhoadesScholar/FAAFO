@@ -142,7 +142,7 @@ def _plot(results, configs, dataset):
     fig.suptitle(f"Probabilistic optimizers on {dataset}: gate & count ablation",
                  fontsize=14, fontweight="bold")
     fig.tight_layout()
-    out = os.path.join(HERE, "training_comparison.png")
+    out = os.path.join(HERE, f"training_comparison_{dataset}.png")
     fig.savefig(out, dpi=130, bbox_inches="tight")
     print(f"Saved plot to {out}")
 
@@ -157,7 +157,7 @@ def _dump(results, configs, dataset, meta):
             "mutated_per_step": float(_agg(results, cfg, "mutated_per_step").mean()),
             "val_acc_curves": [r.val_acc for r in results[cfg]],
         }
-    out = os.path.join(HERE, "training_comparison.json")
+    out = os.path.join(HERE, f"training_comparison_{dataset}.json")
     with open(out, "w") as f:
         json.dump(payload, f, indent=2)
     print(f"Saved metrics to {out}")

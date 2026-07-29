@@ -193,6 +193,15 @@ def test_gate_low_selects_lower_quantile():
     assert probs[0].item() > 0.0 and probs[0].item() >= probs[1].item()
 
 
+def test_uniform_weighting_ignores_gradient():
+    base = torch.optim.SGD([torch.zeros(1, requires_grad=True)], lr=0.1)
+    opt = ProbabilisticOptimizer(base, gate="none", weight_by="uniform", num_mutations=4.0)
+    grad = torch.tensor([0.1, 10.0, 0.1, 10.0])
+    probs = opt.mutation_probabilities(grad)
+    # Equal probability regardless of gradient magnitude.
+    assert torch.allclose(probs, probs[0].expand_as(probs))
+
+
 def test_gate_none_all_eligible():
     base = torch.optim.SGD([torch.zeros(1, requires_grad=True)], lr=0.1)
     opt = ProbabilisticOptimizer(base, gate="none", num_mutations=100.0)

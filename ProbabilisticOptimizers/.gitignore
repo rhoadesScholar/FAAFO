@@ -1,0 +1,9 @@
+# Downloaded datasets (MNIST/FashionMNIST via torchvision)
+data/
+# Python / venv / build cruft
+__pycache__/
+*.py[cod]
+.venv/
+*.egg-info/
+build/
+dist/

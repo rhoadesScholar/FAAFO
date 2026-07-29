@@ -82,7 +82,7 @@ annealed over training.
 | --- | --- | --- |
 | `gate` | `"high"` / `"low"` / `"none"` | Which entries are eligible: over the gate, under it, or all. |
 | `threshold_mode` | `"abs"` / `"quantile"` | Interpret `threshold` as an absolute `|grad|` or as a per-layer quantile (scale-free; e.g. `0.5` splits each layer at its median gradient). |
-| `weight_by` | `"grad"` / `"neg_grad"` | Softmax mass on large vs. small gradients. |
+| `weight_by` | `"grad"` / `"neg_grad"` / `"uniform"` | Softmax mass on large vs. small gradients, or ignore the gradient entirely (uniform — the control for whether weighting matters). |
 | `num_mutations` | float or callable | Expected mutations per layer, fixed or adaptive. |
 
 Adaptive count strategies (`ProbabilisticOptimizers.mutation_counts`) make the
@@ -104,85 +104,125 @@ num_mutations = GradientScaled(scale=1500.0, stat="mean", max_count=80.0)
 Benchmark: minimise the **Rastrigin** function (a grid of deep local minima
 around a single global minimum at 0) from 60 random starts, wrapping Adam
 (`lr=0.05`, 600 steps) with `threshold=0.5`, `num_mutations=3`, `temperature=2`,
-and mutation magnitude annealed to 2% over training. We report the best-so-far
-loss reached (lower is better).
+and mutation magnitude annealed to 2% over training. This first pass reported the
+**best-so-far** loss (the lowest value visited at any step; lower is better):
 
 ![Rastrigin benchmark](ProbabilisticOptimizers/rastrigin_benchmark.png)
 
-| Method | median final | mean final | escape rate (<1.0) |
-| --- | ---: | ---: | ---: |
-| Adam (baseline) | 25.4 | 24.4 | 3.3% |
-| Prob-Adam + Gaussian | 20.5 (**−19%**) | 23.5 | 0% |
-| Prob-Adam + Uniform | 17.5 (**−31%**) | 23.0 | 0% |
-| Prob-Adam + Chaotic | 47.1 (**+86%**) | 48.3 | 0% |
+| Method | best-so-far (median) | escape rate (<1.0) |
+| --- | ---: | ---: |
+| Adam (baseline) | 25.4 | 3.3% |
+| Prob-Adam + Gaussian | 20.5 (**−19%**) | 0% |
+| Prob-Adam + Uniform | 17.5 (**−31%**) | 0% |
+| Prob-Adam + Chaotic | 47.1 (**+86%**) | 0% |
 
-The result is **mixed, and instructive**:
+At face value the Gaussian/uniform mutators look like they *help* (−19%/−31%),
+while chaotic hurts and nobody reaches the global basin. **That apparent help was
+too good to trust** — see below.
 
-* **Gradient-weighted Gaussian/uniform resampling improves the typical case.**
-  It cuts the *median* final loss by ~20–30% relative to vanilla Adam: the
-  gradient-biased noise nudges the descent trajectory into modestly better local
-  basins more often than not.
-* **It does not improve the rate of finding the global optimum** (escape rate
-  stays ~0). This follows directly from the design: because only *high-gradient*
-  entries are eligible to mutate, at a settled local minimum — where all
-  gradients are ~0 — nothing is eligible, so the hook cannot kick a converged
-  model out of a basin. The exploration all happens *during* descent, not after
-  it stalls. (Adam's lone 3.3% is 2/60 lucky starts, i.e. noise.)
-* **The deterministic chaotic mutator hurts** (+86% median loss). Its
-  structured, geometry-blind jumps are a poor match for this landscape; simple
-  distribution draws beat it handily.
+### 1b. Was the Rastrigin gain real? (No — it was mostly a best-so-far artifact)
 
-Takeaway for the "find out" ledger: framing mutation eligibility on *high*
-gradient magnitude makes this a **descent-time exploration** trick (a
-gradient-aware cousin of injecting annealed noise) rather than a
-minimum-escaping one. If escaping stalled minima is the goal, the eligibility
-rule should be inverted or the gate dropped — which motivated the next stunt.
+`best-so-far` is a biased metric for a noisy optimiser: injecting perturbations
+and keeping the single luckiest point you ever pass through is a
+"best-of-N-samples" estimator — more noise ⇒ more distinct points visited ⇒
+lower best-so-far, whether or not the noise actually optimises anything. To
+separate real improvement from the artifact we ran matched controls
+(`rastrigin_controls.py`, 100 seeds, same annealed dose), reporting both
+best-so-far **and** the *final settled* iterate (what you would actually deploy):
+
+![Rastrigin controls](ProbabilisticOptimizers/rastrigin_controls.png)
+
+| Method | best-so-far | final (settled) |
+| --- | ---: | ---: |
+| Adam | 24.9 | 24.9 |
+| Adam + jitter-probe *(best-of-N control)* | **20.8** | 24.9 |
+| Mutation (gradient-weighted) | **18.0** | **47.7** |
+| Mutation (uniform position) | 23.2 | 70.2 |
+
+The controls are damning for the original claim:
+
+* **Most of the "gain" is pure best-of-N.** Just probing a *jittered copy* of
+  Adam's weights each step — never letting it touch the optimiser's trajectory —
+  drops best-so-far from 24.9 to **20.8 at zero cost to the deployed model** (its
+  final is still 24.9, identical to Adam). No real exploration; the metric alone
+  produces most of the improvement.
+* **Committing the mutations makes the actual solution worse.** Gradient-weighted
+  mutation posts the best-looking best-so-far (18.0) but its *settled* iterate is
+  **47.7 — roughly 2× worse than Adam (24.9)**. The low best-so-far is a lucky
+  point it visits and immediately leaves.
+* **Gradient weighting does do *something* — just not something useful here.** It
+  reaches a lower best-so-far than uniform-position mutation (18.0 vs 23.2), so
+  the softmax genuinely steers jumps toward more promising coordinates; but it
+  buys a better *lottery ticket*, not a better final model.
+
+**Corrected takeaway:** on Rastrigin this mutation scheme does **not** optimise
+better than Adam. The earlier −19%/−31% was the best-so-far metric rewarding
+noise; measured by the deployable (final) iterate, mutation is neutral-to-harmful
+— consistent with the neural-network results below. Gating on *high* gradients
+also means it can never kick a settled model out of a minimum (gradients ≈ 0
+there), so it is at best a *descent-time* jitter, not a minimum-escaper. Lesson
+for the ledger: **if a stochastic trick only looks good under best-so-far, report
+the settled iterate too.**
 
 ### 2. Neural-network training — gate & count ablation
 
-An actual training run (see *Running a training run* below): a small MLP on a
-synthetic teacher-student classification task with **20% training-label noise**
-and a small train set, so the network overfits and there is a real
-generalisation gap to move. Adam (`lr=1e-3`) is wrapped with a ~30%-relative
-Gaussian perturbation. We compare, over 6 seeds, the **gate** (high / none /
-inverted) and the **mutation-count** strategy. Because task difficulty varies a
-lot across seeds, we report the **paired** delta vs Adam (same seed).
+An actual training run (see *Running a training run* below), comparing the
+**gate** (high / none / inverted) and the **mutation-count** strategy over
+matched seeds. Because task difficulty varies across seeds, we report the
+**paired** delta vs Adam (same seed).
 
-![Training comparison](ProbabilisticOptimizers/training_comparison.png)
+**MNIST** (real data — small CNN, 8k-example subset, 3 epochs, 3 seeds). This is
+the headline because the low seed variance makes several effects statistically
+clear (error bars that miss zero are real):
+
+![MNIST comparison](ProbabilisticOptimizers/training_comparison_mnist.png)
 
 | Config | Δ final val-acc vs Adam (paired) | mut/step |
 | --- | ---: | ---: |
-| `gate=high` (original) | −0.39 ± 0.86 pts | 211 |
-| `gate=none` (dropped) | −0.28 ± 0.48 pts | 422 |
-| `gate=low` (inverted) | −0.02 ± 0.34 pts | 211 |
-| `count=fixed(4)` | −0.03 ± 0.31 pts | 24 |
-| `count=mean-grad` | −0.13 ± 0.33 pts | 33 |
+| `gate=low` (inverted) | −0.04 ± 0.12 pts | 2069 |
+| `count=fixed(4)` | −0.06 ± 0.20 pts | 32 |
+| `gate=high` (original) | **−0.31 ± 0.14 pts** | 2071 |
+| `gate=none` (dropped) | **−0.48 ± 0.21 pts** | 4138 |
+| `count=mean-grad` | **−0.98 ± 0.76 pts** | 100 |
 
-What we found — and it partly **contradicts the going-in hypothesis**:
+**Synthetic** teacher-student task with **20% training-label noise** and a small
+train set (so the net overfits and there is a real generalisation gap), 6 seeds.
+Same ordering, larger noise — corroborates MNIST:
 
-* At these doses every variant is **within noise of Adam** (all error bars cross
-  zero over 6 seeds), and the reachable *peak* val-accuracy (~0.89) is unchanged
-  — so weight resampling is not an effective regulariser here, it only jostles
-  the post-peak trajectory.
-* The **ordering is consistent and against the hypothesis**: inverting the gate
-  (`gate=low`, mutating stuck/low-gradient weights) is the *most benign*
-  (~neutral), while the original **`gate=high` is the most disruptive** and most
-  variable. Perturbing the weights Adam is *actively* moving fights the optimiser
-  hardest; perturbing near-dead weights barely registers. So "inverting will
-  hurt" did **not** hold — if anything it is the safest of the three.
-* **Dropping the gate** sits in between, at 2× the mutation cost (every entry is
-  eligible, so the fixed fraction resamples twice as many weights).
-* **Adaptive counts are a footgun if uncapped.** A first, mis-scaled
-  `GradientScaled` (tying the count to mean `|grad|` with no sensible cap) fired
-  100–400 mutations/step and **destabilised training badly** (−6.5 ± 12 pts,
-  including a run that collapsed to 47% accuracy). Capped to a comparable dose it
-  is stable and unremarkable. Lesson: if you scale the budget by gradient
-  magnitude, cap it — gradients are largest exactly when the model is most
-  fragile (early training).
+![Synthetic comparison](ProbabilisticOptimizers/training_comparison_synthetic.png)
+
+| Config | Δ final val-acc vs Adam (paired) |
+| --- | ---: |
+| `gate=low` (inverted) | −0.02 ± 0.34 pts |
+| `count=fixed(4)` | −0.03 ± 0.31 pts |
+| `count=mean-grad` | −0.13 ± 0.33 pts |
+| `gate=none` (dropped) | −0.28 ± 0.48 pts |
+| `gate=high` (original) | −0.39 ± 0.86 pts |
+
+What we found — and it **contradicts the going-in hypothesis**:
+
+* **Nothing helps.** No variant beats Adam on either dataset; the reachable peak
+  accuracy is unchanged. Weight resampling is not a useful regulariser here.
+* **The ordering is consistent across both datasets and against the hypothesis:**
+  inverting the gate (`gate=low`, mutating stuck/low-gradient weights) is the
+  *most benign* (statistically indistinguishable from Adam on MNIST), while the
+  original **`gate=high` is genuinely harmful** (−0.31 pts on MNIST, error bar
+  clear of zero). Perturbing the weights Adam is *actively* moving fights the
+  optimiser hardest; perturbing near-dead weights barely registers. "Inverting
+  will hurt" did **not** hold — it is the *safest* of the three.
+* **Dropping the gate is the worst of the gate choices** (−0.48 pts on MNIST) at
+  2× the mutation cost — every entry is eligible, so the fixed fraction resamples
+  twice as many weights, for strictly more harm.
+* **Adaptive counts are a footgun.** `GradientScaled` (count ∝ mean `|grad|`) is
+  the worst config on MNIST (−0.98 pts) and, in an earlier *uncapped* run on the
+  synthetic task, **destabilised training badly** (−6.5 ± 12 pts, one seed
+  collapsing to 47%). Gradients are largest exactly when the model is most
+  fragile (early training), so tying the budget to them concentrates disruption
+  at the worst time. If you must, cap it hard.
 
 Net "find out": on ordinary supervised training, gradient-weighted resampling is
-close to a no-op at safe doses and harmful at large ones; the *high*-gradient
-gate — the whole premise — is the worst of the gate choices, not the best.
+neutral at best and harmful otherwise; the *high*-gradient gate — the whole
+premise of the original idea — is the *worst* of the gate choices, not the best.
 
 ## Setup
 
@@ -202,7 +242,7 @@ pip install -e .
 ```bash
 # Full gate & count ablation on the offline synthetic task (fast on an M-series Mac):
 python -m ProbabilisticOptimizers.compare --dataset synthetic --seeds 6 --epochs 25
-# -> training_comparison.png + training_comparison.json
+# -> training_comparison_synthetic.png + training_comparison_synthetic.json
 
 # A single config, verbose:
 python -m ProbabilisticOptimizers.train --config gate_low --dataset synthetic --epochs 25
@@ -219,6 +259,7 @@ mutator / count combinations there.
 ## Reproduce the other results
 
 ```bash
-python -m ProbabilisticOptimizers.experiment   # Rastrigin escape benchmark -> rastrigin_benchmark.png
-python -m ProbabilisticOptimizers.tests        # sanity tests (22)
+python -m ProbabilisticOptimizers.experiment          # Rastrigin best-so-far benchmark -> rastrigin_benchmark.png
+python -m ProbabilisticOptimizers.rastrigin_controls  # best-of-N controls -> rastrigin_controls.png
+python -m ProbabilisticOptimizers.tests               # sanity tests
 ```

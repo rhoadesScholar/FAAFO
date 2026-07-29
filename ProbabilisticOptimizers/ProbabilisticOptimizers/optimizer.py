@@ -45,7 +45,7 @@ from .mutations import NormalMutator
 __all__ = ["ProbabilisticOptimizer", "make_probabilistic"]
 
 GATES = ("high", "low", "none")
-WEIGHTINGS = ("grad", "neg_grad")
+WEIGHTINGS = ("grad", "neg_grad", "uniform")
 THRESHOLD_MODES = ("abs", "quantile")
 
 # A mutation-count spec is either a constant or fn(grad, eligible_mask) -> float.
@@ -78,8 +78,10 @@ class ProbabilisticOptimizer(Optimizer):
             concentrates mutations on the extreme-gradient entry; ``large``
             spreads them uniformly across eligible entries.
         gate: Eligibility rule, one of ``"high"``, ``"low"``, ``"none"``.
-        weight_by: Softmax weighting, ``"grad"`` (mass on large ``|g|``) or
-            ``"neg_grad"`` (mass on small ``|g|``).
+        weight_by: Softmax weighting, ``"grad"`` (mass on large ``|g|``),
+            ``"neg_grad"`` (mass on small ``|g|``), or ``"uniform"`` (ignore the
+            gradient -- pick eligible entries with equal probability; the control
+            for whether gradient weighting matters).
         mutation_prob: Probability of running the mutation hook on any given
             step (a coarse global "how often do we gamble at all" knob).
         per_step_hook: Optional callable ``fn(optimizer)`` invoked after each
@@ -244,7 +246,12 @@ class ProbabilisticOptimizer(Optimizer):
 
         # Softmax over eligible entries only; ineligible entries get -inf logits
         # so they receive zero probability mass and never dilute the others.
-        signed = mag if self.weight_by == "grad" else -mag
+        # "uniform" ignores the gradient (equal logits) -- the control for
+        # whether gradient weighting matters at all.
+        if self.weight_by == "uniform":
+            signed = torch.zeros_like(mag)
+        else:
+            signed = mag if self.weight_by == "grad" else -mag
         logits = signed / self.temperature
         logits = logits.masked_fill(~eligible, float("-inf"))
         soft = torch.softmax(logits, dim=0)
