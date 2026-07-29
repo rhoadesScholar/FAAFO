@@ -30,6 +30,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 LABELS = {
     "adam": "Adam (baseline)",
     "gate_high": "gate=high (orig.)",
+    "gate_high_uniform": "gate=high, uniform-weight",
     "gate_none": "gate=none (dropped)",
     "gate_low": "gate=low (inverted)",
     "count_fixed": "count=fixed(4)",
@@ -38,6 +39,7 @@ LABELS = {
 COLORS = {
     "adam": "#7f7f7f",
     "gate_high": "#1f77b4",
+    "gate_high_uniform": "#17becf",
     "gate_none": "#9467bd",
     "gate_low": "#d62728",
     "count_fixed": "#2ca02c",

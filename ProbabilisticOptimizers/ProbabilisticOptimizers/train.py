@@ -84,6 +84,13 @@ OPTIMIZER_CONFIGS: Dict[str, Optional[dict]] = {
         gate="low", threshold_mode="quantile", threshold=0.5,
         num_mutations=_FRAC, temperature=1.0, weight_by="neg_grad",
     ),
+    # (A) Control: identical to gate_high but positions chosen uniformly (ignore
+    # the gradient). Pairs with gate_high to isolate whether the softmax
+    # gradient-weighting matters at all on real nets.
+    "gate_high_uniform": dict(
+        gate="high", threshold_mode="quantile", threshold=0.5,
+        num_mutations=_FRAC, temperature=1.0, weight_by="uniform",
+    ),
     # (B) Fixed tiny budget: a few mutations per layer regardless of size.
     "count_fixed": dict(
         gate="none", num_mutations=4.0, temperature=1.0, weight_by="grad",

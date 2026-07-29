@@ -181,6 +181,7 @@ clear (error bars that miss zero are real):
 | --- | ---: | ---: |
 | `gate=low` (inverted) | −0.04 ± 0.12 pts | 2069 |
 | `count=fixed(4)` | −0.06 ± 0.20 pts | 32 |
+| `gate=high, uniform-weight` *(control)* | −0.28 ± 0.23 pts | 2069 |
 | `gate=high` (original) | **−0.31 ± 0.14 pts** | 2071 |
 | `gate=none` (dropped) | **−0.48 ± 0.21 pts** | 4138 |
 | `count=mean-grad` | **−0.98 ± 0.76 pts** | 100 |
@@ -193,6 +194,7 @@ Same ordering, larger noise — corroborates MNIST:
 
 | Config | Δ final val-acc vs Adam (paired) |
 | --- | ---: |
+| `gate=high, uniform-weight` *(control)* | +0.39 ± 0.40 pts |
 | `gate=low` (inverted) | −0.02 ± 0.34 pts |
 | `count=fixed(4)` | −0.03 ± 0.31 pts |
 | `count=mean-grad` | −0.13 ± 0.33 pts |
@@ -210,6 +212,14 @@ What we found — and it **contradicts the going-in hypothesis**:
   clear of zero). Perturbing the weights Adam is *actively* moving fights the
   optimiser hardest; perturbing near-dead weights barely registers. "Inverting
   will hurt" did **not** hold — it is the *safest* of the three.
+* **The gradient-weighting — the defining feature of the whole idea — buys
+  nothing.** Replacing the softmax-over-`|grad|` position selection with a
+  *uniform* pick over the same eligible set (`gate=high, uniform-weight`) is
+  statistically indistinguishable from the gradient-weighted version on MNIST
+  (−0.28 vs −0.31) and, on the noisier synthetic task, is if anything *better*
+  (+0.39 vs −0.39). So "softmax of gradient magnitudes" is not doing useful work:
+  what matters is *that* you perturb high-gradient (actively-learning) weights,
+  and that is precisely the harmful part — how you weight within them is noise.
 * **Dropping the gate is the worst of the gate choices** (−0.48 pts on MNIST) at
   2× the mutation cost — every entry is eligible, so the fixed fraction resamples
   twice as many weights, for strictly more harm.
