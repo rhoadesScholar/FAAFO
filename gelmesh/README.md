@@ -13,6 +13,8 @@ gelmesh bench               # relaxation cost vs mesh size -> bench.json
 python -m pytest -q tests   # unit tests, no phantom needed
 ```
 
+![gelmesh schematic](schematic.png)
+
 ## The idea in one paragraph
 
 A smooth, connected spring mesh cannot represent the displacement **jump** across a crack, so slabreg's
@@ -53,6 +55,7 @@ piece about a rigid/affine estimate (see "Compute cost").
 | `solve.py` | `Problem` (pieces, labels, surfaces, faces, anchors) and `solve()` (rounds of extension → relax) |
 | `experiment.py` | the variants, truth-derived anchors, truth frame, error summaries |
 | `figure.py`, `bench.py`, `cli.py` | figure, cost benchmark, command line |
+| `scripts/schematic.py` | the schematic above |
 
 ## Variants
 
@@ -68,6 +71,8 @@ piece about a rigid/affine estimate (see "Compute cost").
 Metric: displacement error of every rendered voxel's source vs. ground truth, in the root piece's frame
 (slab B's own xy, both slabs flattened in z), excluding a 24-px border. *Near crack* = within 80 px of the
 crack line in slab A; *seam band* = |z − 40| < 6; *far* = the rest.
+
+![phantom results](fig_joint.png)
 
 ## Results
 
