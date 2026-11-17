@@ -1,0 +1,26 @@
+[build-system]
+requires = ["setuptools>=64"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "gelmesh"
+version = "0.1.0"
+description = "Joint spring-mesh relaxation of cracked gel slabs on SOFIMA primitives (POC for slabreg)"
+requires-python = ">=3.10"
+dependencies = [
+  "numpy", "scipy", "matplotlib", "pillow", "jax", "jaxlib",
+  "sofima @ git+https://github.com/google-research/sofima",
+  "connectomics @ git+https://github.com/google-research/connectomics",
+]
+
+[project.optional-dependencies]
+test = ["pytest"]
+
+[project.scripts]
+gelmesh = "gelmesh.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["gelmesh*"]
+
+[tool.pytest.ini_options]
+markers = ["slow: needs the full phantom (minutes)"]
