@@ -12,7 +12,7 @@ Example::
     opt = MultiLossOptimizer(
         torch.optim.Adam(model.parameters(), lr=1e-3),
         names=["recon", "kl"],
-        alpha=0.5,             # >0: favour lagging losses; -1: equalise now; 0: initial scale
+        alpha=1.0,             # >0: favour lagging losses; -1: equalise now; 0: initial scale
         clip_grad_norm=None,   # optional gradient clipping, off by default
     )
     stats = opt.step({"recon": recon_loss, "kl": kl_loss})

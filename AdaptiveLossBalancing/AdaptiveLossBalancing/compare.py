@@ -40,9 +40,10 @@ METHODS = {
     "raw sum": dict(balance=False),
     "alpha=-1 (equalise now)": dict(alpha=-1.0),
     "alpha=0 (initial scale)": dict(alpha=0.0),
-    "alpha=0.5 (default)": dict(alpha=0.5),
-    "alpha=1": dict(alpha=1.0),
-    "alpha=0.5 + clip 1.0": dict(alpha=0.5, clip_grad_norm=1.0),
+    "alpha=0.5": dict(alpha=0.5),
+    "alpha=1 (default)": dict(alpha=1.0),
+    "alpha=2": dict(alpha=2.0),
+    "alpha=1 + clip 1.0": dict(alpha=1.0, clip_grad_norm=1.0),
     "per-batch (beta=0, alpha=-1)": dict(alpha=-1.0, beta=0.0),
 }
 GRID = list(itertools.product([1e-5, 1e-4, 1e-3, 1e-2], [0.3, 1.0, 3.0]))  # (w_B, w_C)

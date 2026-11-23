@@ -43,7 +43,7 @@ class LossBalancer:
 
     Args:
         names: loss names, fixed for the run.
-        alpha: progress exponent (see module docstring). Default 0.5.
+        alpha: progress exponent (see module docstring). Default 1.0.
         beta: EMA decay for the current loss level, in [0, 1). Higher is
             slower and less noisy.
         warmup: number of initial steps averaged to get each loss's reference
@@ -60,7 +60,7 @@ class LossBalancer:
     def __init__(
         self,
         names: Iterable[str],
-        alpha: float = 0.5,
+        alpha: float = 1.0,
         beta: float = 0.99,
         warmup: int = 20,
         priorities: Optional[Mapping[str, float]] = None,
